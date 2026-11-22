@@ -425,7 +425,7 @@ mycimmena/
 
 `ORIGINE.md` annota da quale commit di `CLUBDELCIMMENA` è stato copiato il frontend (oggi `48eb2c4`), così quando sul sito si corregge qualcosa si sa se vale anche qui.
 
-Repo remota: `https://github.com/dariotronic/mycimmena` (da creare su GitHub come pubblica e collegare con `git remote add origin`; oggi la cartella locale non ha ancora un remote né commit).
+Repo remota: `https://github.com/dariotronic/mycimmena`.
 
 ---
 
@@ -441,7 +441,7 @@ Repo remota: `https://github.com/dariotronic/mycimmena` (da creare su GitHub com
 ## 17. Fasi
 
 **Fase 0: base**
-- [ ] Creare la repo `dariotronic/mycimmena` su GitHub e collegarla
+- [x] Creare la repo `dariotronic/mycimmena` su GitHub e collegarla
 - [ ] Copiare il frontend da `CLUBDELCIMMENA@48eb2c4` in `www/`, scrivere `ORIGINE.md`
 - [ ] `index.php` → `index.html` statico, con il controllo della WebView
 - [ ] Togliere login, push, reaction, risposte, gestione utenti
