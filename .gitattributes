@@ -1,0 +1,10 @@
+# Fine riga LF nella repo e nella cartella di lavoro (gradlew deve averle LF); i .bat restano CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+*.jks binary
+*.keystore binary

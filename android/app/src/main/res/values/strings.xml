@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">myCimmena</string>
+    <string name="title_activity_main">myCimmena</string>
+    <string name="package_name">it.mycimmena.app</string>
+    <string name="custom_url_scheme">it.mycimmena.app</string>
+</resources>

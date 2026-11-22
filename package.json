@@ -1,0 +1,22 @@
+{
+  "name": "mycimmena",
+  "version": "0.1.0",
+  "private": true,
+  "description": "App Android personale per tenere traccia di film e serie visti e da vedere.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "serve": "node tools/serve.js",
+    "sync": "cap sync android",
+    "open": "cap open android",
+    "apk:debug": "cap sync android && cd android && gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2"
+  }
+}

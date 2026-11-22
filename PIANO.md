@@ -36,14 +36,14 @@ L'app si distribuisce come APK fuori dal Play Store. I dati dell'utente restano 
 
 ### Contenitore
 - **Capacitor** con progetto Android in `android/`. Il codice web sta in `www/` e resta JavaScript vanilla senza bundler: `npx cap sync` lo copia nell'APK.
-- `index.php` del sito diventa `www/index.html` statico (sprite SVG, template, import map). Niente nonce né CSP generata da PHP: la CSP va in un `<meta>`.
+- `index.php` del sito diventa `www/index.html` statico (sprite SVG e dialog). Niente nonce né CSP generata da PHP: la CSP va in un `<meta>`. Niente import map: sul sito serviva solo a dare una versione ai file per la cache, nell'APK i file sono locali.
 - Plugin previsti:
   - `@capacitor/preferences`: impostazioni piccole
   - `@capacitor/filesystem`: backup, locandine salvate, APK scaricato
   - `@capacitor/share`: esportazione del backup
   - `@capacitor/local-notifications`: compleanno e serata in programma
   - `@capacitor/browser`: pagina di registrazione OMDb, link esterni (Instagram, GitHub)
-  - `@capacitor/app`: versione dell'app e ritorno in primo piano
+  - `@capacitor/app`: tasto Indietro (già dalla Fase 0), versione dell'app e ritorno in primo piano
   - `@capacitor/clipboard`: rilevamento della chiave copiata
   - `CapacitorHttp` (incluso nel core): richieste a IMDb, OMDb e GitHub senza problemi di CORS
   - Un selettore di file per l'importazione (backup JSON e CSV/ZIP di Letterboxd e IMDb), per esempio `@capawesome/capacitor-file-picker` (da verificare)
@@ -51,8 +51,8 @@ L'app si distribuisce come APK fuori dal Play Store. I dati dell'utente restano 
 
 ### Versione minima di Android
 - **Android 7.0 (API 24)**: è il `minSdkVersion` di Capacitor 8, la versione attuale. Se in Fase 0 la versione di Capacitor in uso ne richiede una diversa, si aggiorna questa riga.
-- Il vero requisito è la **WebView**, non Android. Su Android 7+ "Android System WebView" (o Chrome) si aggiorna dal Play Store, ma su telefoni senza Play Store o mai aggiornati può essere vecchia. L'app usa moduli ES e import map, che richiedono **Chromium 89 o successivo** (2021).
-- In `index.html` uno script minimo, non a modulo, controlla `HTMLScriptElement.supports?.('importmap')`. Se manca il supporto mostra "Aggiorna Android System WebView dal Play Store" invece di una pagina bianca.
+- Il vero requisito è la **WebView**, non Android. Su Android 7+ "Android System WebView" (o Chrome) si aggiorna dal Play Store, ma su telefoni senza Play Store o mai aggiornati può essere vecchia. Lo stile dell'app usa `:has()`, le container query e le unità `dvh`, che richiedono **Chromium 108 o successivo** (fine 2022).
+- `www/assets/js/boot.js`, uno script classico in `<head>`, controlla queste tre funzioni con `CSS.supports` (e la presenza di `<dialog>`). Se mancano mostra "Serve un aggiornamento" con l'invito ad aggiornare Android System WebView dal Play Store, invece di una pagina rotta.
 - `targetSdkVersion` quello richiesto dalla versione di Capacitor (oggi 36). Non conta per gli APK fuori dal Play Store, ma Android avvisa all'installazione se è troppo vecchio.
 
 ### Dati sul telefono
@@ -431,9 +431,10 @@ Repo remota: `https://github.com/dariotronic/mycimmena`.
 
 ## 16. Strumenti per compilare (Windows)
 
-- Node.js LTS, Android Studio (con SDK e JDK inclusi), un telefono in modalità sviluppatore o un emulatore.
-- Comandi tipici: `npm install`, `npx cap sync android`, `npx cap open android` (oppure `cd android && gradlew assembleRelease`).
-- Prova veloce senza APK: aprire `www/` con un server locale nel browser (le funzioni native hanno sostituti semplici sul web, dove possibile).
+- Node.js LTS, Android SDK, **JDK 21** (Capacitor 8), un telefono in modalità sviluppatore o un emulatore.
+- Su questo PC: SDK in `%LOCALAPPDATA%AndroidSdk`, JDK Temurin 21 portatile in `%LOCALAPPDATA%Programs	emurin-21` (senza Android Studio). Comandi nel README.
+- Comandi tipici: `npm install`, `npm run sync`, `npm run apk:debug`, `npm run open` (Android Studio).
+- Prova veloce senza APK: `npm run serve` e `http://localhost:8080` nel browser (le funzioni native hanno sostituti semplici sul web, dove possibile). La barra in basso compare solo sugli schermi touch.
 - Per la prova su Android 7 basta un emulatore con API 24 e una WebView aggiornata.
 
 ---
@@ -442,16 +443,20 @@ Repo remota: `https://github.com/dariotronic/mycimmena`.
 
 **Fase 0: base**
 - [x] Creare la repo `dariotronic/mycimmena` su GitHub e collegarla
-- [ ] Copiare il frontend da `CLUBDELCIMMENA@48eb2c4` in `www/`, scrivere `ORIGINE.md`
-- [ ] `index.php` → `index.html` statico, con il controllo della WebView
-- [ ] Togliere login, push, reaction, risposte, gestione utenti
-- [ ] Inizializzare Capacitor (`it.mycimmena.app`, minSdk 24) e il progetto Android; primo APK di debug che si apre
-- [ ] Temi "my" giorno e notte
+- [x] Copiare il frontend da `CLUBDELCIMMENA@48eb2c4` in `www/`, scrivere `ORIGINE.md`
+- [x] `index.php` → `index.html` statico, con il controllo della WebView
+- [x] Togliere login, push, reaction, risposte, gestione utenti
+- [x] Inizializzare Capacitor 8 (`it.mycimmena.app`, minSdk 24) e il progetto Android; primo APK di debug compilato
+- [x] Provare l'APK su un telefono vero (HONOR 400, Android 16, WebView 157): avvio, viste, tema e barre di sistema, tasto Indietro, link del credit
+- [x] Temi "my" giorno e notte
+- [x] Impostazioni provvisorie: tema, versione, credit
+
+Alla fine della Fase 0 l'app si apre con dati vuoti: ogni modifica risponde "Non ancora disponibile" finché `store.js` non sostituisce lo strato provvisorio `api.js` (vedi ORIGINE.md).
 
 **Fase 1: dati locali**
 - [ ] `store.js` con IndexedDB e le migrazioni
 - [ ] Watchlist, hype, randomizer sul negozio locale
-- [ ] Ricerca IMDb con `CapacitorHttp`, modalità light
+- [ ] Ricerca IMDb con `CapacitorHttp` (chiamato in modo esplicito, senza l'opzione che sostituisce `fetch` globale: così le richieste ai file dell'app restano quelle normali della WebView), modalità light
 - [ ] Diario ("Segna come visto", voto, note), "I miei voti" nella scheda, serata in programma
 - [ ] Locandine salvate nel Filesystem
 
