@@ -904,3 +904,137 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .my-viewing-notes { color: var(--muted); font-family: Spectral, serif; font-size: .95rem; line-height: 1.45; }
 .movie-info-mark .mark-seen { gap: 8px; width: 100%; }
 .movie-info-mark .mark-seen .material-icons-outlined { font-size: 20px; }
+
+/* Fase 2: onboarding. Occupa tutto lo schermo; il resto dell'app si nasconde finché non è finito. */
+html[data-onboarding="true"] .site-shell { display: none; }
+.onboarding { min-height: 100dvh; padding: calc(20px + env(safe-area-inset-top)) 22px calc(28px + env(safe-area-inset-bottom)); }
+.onboarding[hidden] { display: none; }
+.onboarding-step { display: grid; gap: 18px; width: min(100%, 640px); margin: 0 auto; }
+.onboarding-step h1 { margin: 0; font-family: Spectral, serif; font-size: clamp(2.2rem, 8vw, 3.4rem); font-weight: 400; line-height: 1.05; outline: none; }
+.onboarding-lead { margin: 0; color: var(--muted); font-size: 1rem; line-height: 1.55; }
+.onboarding-step > p { margin: 0; line-height: 1.6; }
+.onboarding-logo { justify-self: center; width: 120px; height: 120px; margin-top: 4vh; }
+.onboarding-progress { display: flex; gap: 6px; }
+.onboarding-progress span { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+.onboarding-progress span.active { background: var(--apricot); }
+.onboarding-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+.onboarding-actions .button:last-child { min-width: 9rem; }
+.onboarding-form .field label span { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.onboarding-chat { display: grid; gap: 18px; }
+.onboarding-chat fieldset { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
+.onboarding-chat .field-label, .onboarding-chat legend { margin-bottom: 8px; color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.onboarding-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.onboarding-chip { position: relative; cursor: pointer; }
+.onboarding-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.onboarding-chip span { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font-size: .85rem; font-weight: 600; }
+.onboarding-chip input:checked + span { border-color: var(--rust); background: var(--accent-wash-strong); color: var(--rust); }
+.onboarding-chip input:focus-visible + span { outline: 2px solid var(--rust); outline-offset: 2px; }
+.onboarding-samples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.onboarding-sample-pick { display: grid; gap: 8px; width: 100%; padding: 12px; border: 2px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.onboarding-sample.selected .onboarding-sample-pick { border-color: var(--rust); box-shadow: var(--shadow-md); }
+.onboarding-sample-name { color: var(--rust); font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.onboarding-sample-poster { width: 100%; aspect-ratio: 2 / 3; border-radius: var(--radius-sm); object-fit: cover; background: var(--clay-wash); }
+.onboarding-sample-title { font-family: Spectral, serif; font-size: 1.1rem; }
+.onboarding-sample dl { display: grid; gap: 6px; margin: 0; font-size: .75rem; }
+.onboarding-sample dt { color: var(--muted); font-size: .62rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.onboarding-sample dd { margin: 0; line-height: 1.35; }
+.onboarding-sample-note { color: var(--muted); font-size: .75rem; line-height: 1.4; }
+.onboarding-compare { display: grid; gap: 12px; }
+.onboarding-plan { padding: 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.onboarding-plan.chosen { border-color: var(--rust); }
+.onboarding-plan h2 { margin: 0 0 8px; font-family: Spectral, serif; font-size: 1.4rem; font-weight: 400; }
+.onboarding-plan h2 small { color: var(--rust); font-family: Montserrat, sans-serif; font-size: .7rem; font-weight: 700; }
+.onboarding-plan ul { margin: 0 0 6px; padding-left: 22px; line-height: 1.5; font-size: .9rem; }
+.onboarding-plan .pros li::marker { content: "✓  "; color: var(--rust); }
+.onboarding-plan .cons li::marker { content: "–  "; color: var(--muted); }
+.onboarding-import { display: grid; gap: 14px; }
+.onboarding-import section { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.onboarding-import h2 { margin: 0 0 6px; font-family: Spectral, serif; font-size: 1.3rem; font-weight: 400; }
+.onboarding-import ol { margin: 0; padding-left: 20px; line-height: 1.55; font-size: .9rem; }
+
+/* Chiave OMDb (onboarding e dialog). */
+.key-steps { display: grid; gap: 18px; margin: 0; padding-left: 22px; line-height: 1.55; }
+.key-steps li { display: grid; gap: 10px; justify-items: start; }
+.key-steps li > p { margin: 0; }
+.key-form { display: flex; flex-wrap: wrap; gap: 10px; width: 100%; }
+.key-form input { flex: 1 1 10rem; min-height: 46px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font: inherit; font-family: ui-monospace, monospace; letter-spacing: .08em; }
+.key-status { margin: 0; min-height: 1.2em; font-size: .9rem; font-weight: 600; }
+.key-status.ok { color: var(--rust); }
+.key-status.error { color: var(--error-color); }
+.key-suggestion { margin: 0; padding: 8px 12px; border-radius: var(--radius-md); background: var(--accent-wash); font-size: .9rem; }
+.key-setup > .text-button { margin-top: 14px; }
+
+/* Banner "in attesa" e indicatore del completamento. */
+.mode-banner { display: flex; align-items: center; gap: 12px; margin: 10px 0 0; padding: 8px 14px; border: 1px solid var(--accent-border); border-radius: var(--radius-md); background: var(--accent-wash); font-size: .82rem; }
+.mode-banner[hidden] { display: none; }
+.mode-banner-open { flex: 1; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.mode-banner-later { flex: none; font-size: .8rem; }
+.completion-indicator { position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 30; margin: 0; padding: 6px 14px; border-radius: 999px; background: var(--surface-strong); box-shadow: var(--shadow-md); color: var(--muted); font-size: .75rem; font-weight: 600; transform: translateX(-50%); }
+.completion-indicator[hidden] { display: none; }
+
+/* Serie TV: sezione Episodi della scheda, "Stai guardando" ed editor della struttura. */
+.movie-info-series { display: grid; gap: 12px; margin-top: 22px; }
+.movie-info-series[hidden] { display: none; }
+.series-status { display: flex; flex-wrap: wrap; gap: 6px; }
+.series-status .user-filter-chip { min-height: 32px; padding: 3px 12px; font-size: .78rem; }
+.series-summary { margin: 0; font-size: .9rem; line-height: 1.5; }
+.series-next { gap: 8px; }
+.series-next .material-icons-outlined { font-size: 20px; }
+.series-seasons { display: grid; gap: 8px; }
+.series-season { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.series-season summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-weight: 700; cursor: pointer; list-style: none; }
+.series-season summary::-webkit-details-marker { display: none; }
+.series-season summary::after { content: "▾"; margin-left: 4px; color: var(--muted); transition: transform .18s ease; }
+.series-season[open] summary::after { transform: rotate(180deg); }
+.series-season-count { margin-left: auto; color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.series-custom-badge { padding: 1px 8px; border-radius: 999px; background: var(--clay-wash); color: var(--muted); font-size: .62rem; font-weight: 700; }
+.episode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 6px; padding: 0 12px 10px; }
+.episode { min-height: 40px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.episode.seen { border-color: var(--rust); background: var(--rust); color: var(--paper); }
+.episode:focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
+.series-season-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 12px 12px; font-size: .8rem; }
+.series-season-actions input { min-height: 34px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: inherit; }
+.series-hint { margin: 0; font-size: .75rem; }
+.series-quick-structure { display: grid; gap: 12px; }
+.series-quick-structure .help-text { margin: 0; }
+.series-votes { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: .85rem; }
+.series-vote-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.series-vote-row small { color: var(--muted); }
+.diary-label { color: var(--muted); font-family: Montserrat, sans-serif; font-size: .8em; font-weight: 600; }
+.watching { display: grid; gap: 4px; margin: 0 0 24px; }
+.watching .section-title { margin-bottom: 6px; font-size: 1.35rem; }
+.watching-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.watching-row:first-of-type { border-top: 0; }
+.watching-copy .movie-year { margin: 4px 0 0; }
+.structure-form { display: grid; gap: 14px; }
+.structure-same { display: flex; gap: 8px; }
+.structure-same input { min-width: 0; flex: 1; }
+.structure-rows { display: grid; gap: 6px; max-height: 40vh; overflow: auto; }
+.structure-row { display: grid; grid-template-columns: minmax(0, 1fr) 6rem auto; align-items: center; gap: 10px; font-size: .9rem; }
+.structure-row input, .structure-form .field input { min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
+
+/* Impostazioni, film del cuore, compleanno, pagina Informazioni. */
+.settings-profile { display: flex; align-items: center; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.settings-favorite { flex: none; width: 64px; }
+.settings-name { margin: 0; font-family: Spectral, serif; font-size: 1.5rem; }
+.settings-profile .help-text { margin: 2px 0 0; }
+.settings-group { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.settings-group summary { color: var(--rust); font-weight: 700; cursor: pointer; }
+.profile-settings-form { margin-top: 14px; }
+.profile-settings-form select { min-height: 46px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font: inherit; }
+.settings-mode .button-row { flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.settings-mode .help-text { margin: 4px 0 0; }
+.settings-link { color: inherit; text-decoration: none; }
+.settings-link .material-icons-outlined { color: var(--rust); }
+.movie-picker { display: grid; gap: 6px; }
+.movie-picker input { min-height: 46px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font: inherit; }
+.movie-picker-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.movie-picker-option { display: grid; width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.movie-picker-option small { color: var(--muted); font-weight: 500; }
+.birthday-banner { margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--accent-border); border-radius: var(--radius-lg); background: var(--accent-wash); }
+.birthday-title { margin: 0; font-family: Spectral, serif; font-size: 1.5rem; }
+.birthday-banner .help-text { margin: 4px 0 0; }
+.info-page { display: grid; gap: 22px; }
+.info-page .section-title { margin-bottom: 8px; font-size: 1.4rem; }
+.info-page ul { display: grid; gap: 8px; margin: 0; padding-left: 20px; line-height: 1.6; }
+.info-page a { color: var(--rust); }

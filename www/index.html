@@ -127,6 +127,8 @@
     <p>myCimmena ha bisogno di una versione più recente di <strong>Android System WebView</strong>, il componente di Android che mostra le pagine dentro le app.</p>
     <p>Aggiornala dal Play Store (cerca "Android System WebView", oppure aggiorna Chrome) e riapri l'app.</p>
   </div>
+  <!-- Onboarding del primo avvio (onboarding.js): al suo posto si nasconde il resto dell'app. -->
+  <div id="onboarding" class="onboarding" hidden></div>
   <div class="site-shell">
     <header class="site-header">
       <a class="brand" href="#home" aria-label="myCimmena, home">
@@ -168,7 +170,12 @@
         <img src="assets/logo.svg" alt="myCimmena">
       </a>
     </nav>
+    <div id="mode-banner" class="mode-banner" role="status" hidden>
+      <button class="mode-banner-open" type="button" data-banner-open>Versione completa in attesa: tocca per inserire la chiave</button>
+      <button class="text-button mode-banner-later" type="button" data-banner-later>Più tardi</button>
+    </div>
     <main id="app" class="page-content" tabindex="-1"></main>
+    <p id="completion-indicator" class="completion-indicator" role="status" hidden></p>
     <dialog id="action-dialog" class="action-dialog" aria-labelledby="action-dialog-title">
       <form id="action-dialog-form" class="action-dialog-form">
         <p class="eyebrow">myCimmena</p>
@@ -193,6 +200,7 @@
           <h2 id="movie-info-title" class="section-title"></h2>
           <section id="movie-info-vote" class="movie-vote" aria-labelledby="movie-vote-title" hidden></section>
           <dl id="movie-info-details" class="movie-info-details"></dl>
+          <section id="movie-info-series" class="movie-info-series" data-series-section hidden></section>
           <section id="movie-info-viewings" class="movie-info-viewings" aria-labelledby="movie-info-viewings-title"></section>
         </div>
       </div>
@@ -204,6 +212,21 @@
       <div class="reviews-dialog-content">
         <h2 id="viewing-dialog-title" class="section-title">Segna come visto</h2>
         <div id="viewing-dialog-body"></div>
+      </div>
+    </dialog>
+    <dialog id="series-structure-dialog" class="action-dialog reviews-dialog" aria-labelledby="series-structure-title">
+      <div class="reviews-dialog-content">
+        <h2 id="series-structure-title" class="section-title">Stagioni ed episodi</h2>
+        <div id="series-structure-body"></div>
+      </div>
+    </dialog>
+    <dialog id="omdb-key-dialog" class="action-dialog reviews-dialog" aria-labelledby="omdb-key-title">
+      <button id="omdb-key-close" class="icon-button movie-info-close" type="button" aria-label="Chiudi" title="Chiudi">
+        <span class="material-icons-outlined" data-icon="close" aria-hidden="true"></span>
+      </button>
+      <div class="reviews-dialog-content">
+        <h2 id="omdb-key-title" class="section-title">La chiave di OMDb</h2>
+        <div id="omdb-key-body"></div>
       </div>
     </dialog>
     <dialog id="poster-lightbox" class="poster-lightbox" aria-label="Locandina a schermo intero">

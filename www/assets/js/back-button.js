@@ -4,10 +4,12 @@
 // invece di chiuderla, come fanno le app di sistema.
 import { route } from './navigation.js';
 
-export function initBackButton({ closeMenu }) {
+// `onBack` (facoltativo) gestisce il tasto per primo, per esempio nell'onboarding: se restituisce true basta così.
+export function initBackButton({ closeMenu, onBack = () => false }) {
 	const app = globalThis.Capacitor?.Plugins?.App;
 	if (!app?.addListener) return;
 	app.addListener('backButton', ({ canGoBack }) => {
+		if (onBack()) return;
 		const dialog = [...document.querySelectorAll('dialog[open]')].pop();
 		if (dialog) {
 			// Lo stesso evento del tasto Esc: i moduli che bloccano la chiusura lo annullano.

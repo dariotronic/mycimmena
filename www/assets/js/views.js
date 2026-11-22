@@ -6,7 +6,9 @@ import { sanitizeNotes } from './sanitize.js';
 import { viewingsOf } from './app-data.js';
 import { DEFAULT_DRAW_FILTERS, drawChances, formatChance } from './draw.js';
 import { soundEnabled } from './slot-sounds.js';
-import { APP_VERSION, CREDIT_HANDLE, CREDIT_URL } from './app-info.js';
+import { APP_VERSION, CREDIT_HANDLE, CREDIT_URL, REPO_URL } from './app-info.js';
+import { COMPANY, diaryDefaults, flavourLine, isBirthday, LANGUAGES, PLACES, POPCORN, SPECTATORS } from './profile.js';
+import { renderWatchingRow } from './series-ui.js';
 
 // Gatto SVG (simboli #cat-full e #cat-empty in index.html): la sagoma vuota sotto, quella calico sopra,
 // ritagliata da CSS in base allo stato della cella (full, half, empty).
@@ -64,6 +66,8 @@ export function createViews(context) {
 			return `
 				<section class="home-view">
 					${pageHeader('Home', 'La prossima serata.')}
+					${renderBirthday(data)}
+					${renderWatching()}
 					${emptyState('Non c’è ancora una serata in programma.', 'Organizza la prossima serata', '#calendario')}
 					${renderHomeSummary(data)}
 				</section>
@@ -94,6 +98,7 @@ export function createViews(context) {
 		return `
 			<section class="home-view" aria-labelledby="home-title">
 				${pageHeader('Home', 'La prossima serata.')}
+				${renderBirthday(data)}
 				<div class="home-eyebrow-row">
 					<p class="eyebrow">La prossima serata</p>
 					<button id="share-home" class="icon-button" type="button" aria-label="Condividi la prossima serata" title="Condividi">
@@ -122,6 +127,26 @@ export function createViews(context) {
 					</div>
 				</div>
 				<div class="home-film-list">${movieRows}</div>
+			</section>
+		`;
+	}
+
+	// Il giorno del compleanno (PIANO.md, §12): auguri in Home e il film del cuore "da riguardare".
+	function renderBirthday(data) {
+		if (!isBirthday(data.profile?.birthday, today())) return '';
+		const name = data.profile?.name ? `, ${escapeHtml(data.profile.name)}` : '';
+		const favorite = data.favorite ? `<p class="help-text">Per festeggiare: ${escapeHtml(movieName(data.favorite))}, il tuo film del cuore?</p>` : '';
+		return `<div class="birthday-banner" role="status"><p class="birthday-title">🎂 Buon compleanno${name}!</p>${favorite}</div>`;
+	}
+
+	// "Stai guardando": serie in corso o in pausa, con il pulsante per segnare il prossimo episodio.
+	function renderWatching() {
+		const watching = getData().watching || [];
+		if (!watching.length) return '';
+		return `
+			<section class="watching" aria-labelledby="watching-title">
+				<h2 id="watching-title" class="section-title">Stai guardando</h2>
+				${watching.map(item => renderWatchingRow(item, { poster })).join('')}
 			</section>
 		`;
 	}
@@ -309,7 +334,7 @@ export function createViews(context) {
 			<article class="archive-film-row diary-row">
 				${moviePosterButton(movie, 'archive-film-poster')}
 				<div class="archive-film-copy">
-					<h3 class="archive-film-title">${escapeHtml(movieName(movie))}</h3>
+					<h3 class="archive-film-title">${escapeHtml(movieName(movie))}${viewing.label ? ` <span class="diary-label">· ${escapeHtml(viewing.label)}</span>` : ''}</h3>
 					${meta ? `<p class="diary-meta">${escapeHtml(meta)}</p>` : ''}
 					<div class="review-summary">${ratingSummary(viewing.rating)}</div>
 					${notes ? `<div class="review-content diary-notes">${notes}</div>` : ''}
@@ -338,6 +363,7 @@ export function createViews(context) {
 		const markButton = `<button class="button secondary mark-seen" data-movie-id="${escapeHtml(movie.id)}" type="button">${icon('task_alt')}<span>${markLabel}</span></button>`;
 		if (!list.length) return inWatchlist ? `<div class="movie-info-mark">${markButton}</div>` : '';
 		const rounded = average === null ? null : Math.round(average * 2) / 2;
+		if (contentType(movie) === 'series') return renderSeriesVotes(movie, list) + `<div class="movie-info-mark">${markButton}</div>`;
 		const summary = ratedCount > 1
 			? `<p class="my-viewings-average">Media ${escapeHtml(formatSpipe(rounded))} · ${list.length} visioni</p>`
 			: list.length > 1 ? `<p class="my-viewings-average">${list.length} visioni</p>` : '';
@@ -364,14 +390,61 @@ export function createViews(context) {
 		`;
 	}
 
+	// Una visione nella lista di "I miei voti".
+	function myViewingItem(viewing, prefix = '') {
+		const meta = viewingMeta(viewing);
+		const notes = sanitizeNotes(viewing.notes).text;
+		return `
+			<li>
+				<button class="my-viewing" type="button" data-viewing-id="${escapeHtml(viewing.id)}" aria-label="Modifica la visione del ${escapeHtml(formatDate(viewing.date))}">
+					<span class="my-viewing-date">${escapeHtml(formatDate(viewing.date))}${prefix ? ` · ${escapeHtml(prefix)}` : ''}</span>
+					<span class="review-summary">${ratingSummary(viewing.rating)}</span>
+					${meta ? `<span class="diary-meta">${escapeHtml(meta)}</span>` : ''}
+					${notes ? `<span class="my-viewing-notes">${escapeHtml(notes.length > 140 ? `${notes.slice(0, 140).trim()}…` : notes)}</span>` : ''}
+				</button>
+			</li>
+		`;
+	}
+
+	// "I miei voti" di una serie (PIANO.md, §7): voto complessivo, una riga per stagione (il voto della stagione o la
+	// media delle sessioni), poi le sessioni per data.
+	function renderSeriesVotes(movie, list) {
+		const seriesVotes = list.filter(viewing => viewing.scope === 'series');
+		const seasonVotes = list.filter(viewing => viewing.scope === 'season');
+		const sessions = list.filter(viewing => viewing.scope !== 'series' && viewing.scope !== 'season');
+		const seasonNumbers = [...new Set([...seasonVotes.map(viewing => viewing.season), ...sessions.flatMap(viewing => (viewing.episodes || []).map(episode => episode.s))])].sort((first, second) => first - second);
+		const average = items => {
+			const rated = items.filter(viewing => viewing.rating);
+			return rated.length ? Math.round((rated.reduce((sum, viewing) => sum + Number(viewing.rating), 0) / rated.length) * 2) / 2 : null;
+		};
+		const seasonRows = seasonNumbers.map(n => {
+			const own = seasonVotes.find(viewing => viewing.season === n && viewing.rating);
+			const value = own ? Number(own.rating) : average(sessions.filter(viewing => (viewing.episodes || []).some(episode => episode.s === n)));
+			return value ? `<li class="series-vote-row"><span>Stagione ${n}</span><span>${escapeHtml(formatSpipe(value))}${own ? '' : ' <small>(media delle sessioni)</small>'}</span></li>` : '';
+		}).join('');
+		const overall = seriesVotes.find(viewing => viewing.rating);
+		return `
+			<h3 id="movie-info-viewings-title" class="movie-vote-title">I miei voti</h3>
+			${overall ? `<p class="my-viewings-average">Serie: ${escapeHtml(formatSpipe(Number(overall.rating)))}</p>` : ''}
+			${seasonRows ? `<ul class="series-votes">${seasonRows}</ul>` : ''}
+			<ul class="my-viewings">${list.map(viewing => myViewingItem(viewing, viewing.label)).join('')}</ul>
+		`;
+	}
+
 	// Modulo della visione (nuova o da modificare) nel dialog del diario. Lo slider dei gatti e l'editor delle note sono
 	// quelli delle recensioni del sito (review-editor.js), con il voto facoltativo.
-	function renderViewingForm({ movie, viewing = null, inWatchlist = false }) {
+	// `scope` e `season` per il voto a una stagione o a tutta la serie; una visione nuova propone "Dove" e "Con chi"
+	// dalle risposte dell'onboarding.
+	function renderViewingForm({ movie, viewing = null, inWatchlist = false, scope = null, season = null }) {
 		const rating = viewing?.rating ? Number(viewing.rating) : 0;
 		const id = viewing ? escapeHtml(viewing.id) : 'new';
+		const kind = viewing?.scope || scope;
+		// Il voto a una stagione o alla serie non è una serata: niente "Dove" e "Con chi" proposti.
+		const defaults = viewing || kind ? {} : diaryDefaults(getData().profile);
+		const subtitle = viewing?.label || (kind === 'season' ? `Stagione ${season}` : kind === 'series' ? 'Voto alla serie' : '');
 		return `
-			<form class="review-form viewing-form" data-review-form="${escapeHtml(movie.id)}" data-viewing-form${viewing ? ` data-viewing-id="${id}"` : ''} novalidate>
-				<p class="viewing-form-title">${escapeHtml(movieName(movie))}</p>
+			<form class="review-form viewing-form" data-review-form="${escapeHtml(movie.id)}" data-viewing-form${viewing ? ` data-viewing-id="${id}"` : ''}${!viewing && kind ? ` data-scope="${escapeHtml(kind)}"${season ? ` data-season="${Number(season)}"` : ''}` : ''} novalidate>
+				<p class="viewing-form-title">${escapeHtml(movieName(movie))}${subtitle ? ` <span class="diary-label">· ${escapeHtml(subtitle)}</span>` : ''}</p>
 				<div class="form-grid">
 					<div class="field">
 						<label for="viewing-date-${id}">Data</label>
@@ -379,11 +452,11 @@ export function createViews(context) {
 					</div>
 					<div class="field">
 						<label for="viewing-place-${id}">Dove <span>(facoltativo)</span></label>
-						<input id="viewing-place-${id}" name="place" type="text" maxlength="120" value="${escapeHtml(viewing?.place || '')}" placeholder="Divano, cinema…">
+						<input id="viewing-place-${id}" name="place" type="text" maxlength="120" value="${escapeHtml(viewing?.place || defaults.place || '')}" placeholder="Divano, cinema…">
 					</div>
 					<div class="field full">
 						<label for="viewing-with-${id}">Con chi <span>(facoltativo)</span></label>
-						<input id="viewing-with-${id}" name="withWhom" type="text" maxlength="120" value="${escapeHtml(viewing?.withWhom || '')}">
+						<input id="viewing-with-${id}" name="withWhom" type="text" maxlength="120" value="${escapeHtml(viewing?.withWhom || defaults.withWhom || '')}">
 					</div>
 				</div>
 				<fieldset class="review-rating">
@@ -398,7 +471,7 @@ export function createViews(context) {
 					</div>
 				</fieldset>
 				${richEditor({ label: 'Note <span>(facoltative)</span>', toolbarLabel: 'Formattazione delle note', textLabel: 'Note sulla visione', content: viewing ? sanitizeNotes(viewing.notes).html : '' })}
-				${!viewing && inWatchlist ? `
+				${!viewing && inWatchlist && !kind ? `
 					<label class="viewing-remove-watchlist">
 						<input class="switch" name="removeFromWatchlist" type="checkbox" role="switch" checked>
 						<span>Togli dalla watchlist</span>
@@ -660,6 +733,7 @@ export function createViews(context) {
 				<div id="search-results" class="search-results" hidden></div>
 			</section>
 			<div id="pending-additions" hidden></div>
+			${adding ? '' : renderWatching()}
 			<section id="watchlist-section" ${adding ? 'hidden' : ''}>
 				${sortToolbar()}
 				<div id="movie-list-rows" class="list-stack movie-list" data-view="${getWatchlistView()}" data-mobile-cards-per-row="${getWatchlistMobileCardsPerRow()}" style="--cards-per-row: ${getWatchlistCardsPerRow()}; --mobile-cards-per-row: ${getWatchlistMobileCardsPerRow()}">${renderMovieRows()}</div>
@@ -740,11 +814,75 @@ export function createViews(context) {
 			: 'La watchlist è vuota. Cerca un titolo per aggiungere il primo film.');
 	}
 
+	const selectField = (name, label, options, value) => `
+		<div class="field">
+			<label for="profile-${name}">${label}</label>
+			<select id="profile-${name}" name="${name}">
+				<option value="">—</option>
+				${options.map(option => `<option value="${escapeHtml(option.value)}"${option.value === value ? ' selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+			</select>
+		</div>
+	`;
+
+	const MODE_TEXT = {
+		light: ['Light', 'Schede con i dati di IMDb: locandina, anno, tipo e attori principali.'],
+		full: ['Completa', 'Trama, regista, cast, durata, genere, voto IMDb e premi da OMDb, con la tua chiave.'],
+		waiting: ['Completa, in attesa della chiave', 'Finché la chiave OMDb non funziona le schede restano light.']
+	};
+
 	function renderSettings() {
+		const data = getData();
 		const isNight = getColorMode() === 'night';
+		const profile = data.profile || {};
+		const [modeTitle, modeText] = MODE_TEXT[data.mode] || MODE_TEXT.light;
+		const key = data.settings?.omdbKey || '';
+		// Della chiave si mostrano solo gli ultimi due caratteri, per riconoscerla senza svelarla.
+		const maskedKey = key ? `••••••${key.slice(-2)}` : '';
+		const flavour = flavourLine(profile);
 		return `
-			${pageHeader('Impostazioni')}
+			${pageHeader('Impostazioni', profile.name ? `Ciao, ${profile.name}` : '')}
 			<section class="settings-panel">
+				<div class="settings-profile">
+					${data.favorite ? `<button class="movie-poster-trigger settings-favorite" data-movie-id="${escapeHtml(data.favorite.id)}" type="button" aria-label="Il tuo film del cuore: ${escapeHtml(data.favorite.title)}">${poster(data.favorite, 'archive-film-poster')}</button>` : ''}
+					<div>
+						<p class="settings-name">${escapeHtml(profile.name || 'Senza nome')}</p>
+						${flavour ? `<p class="help-text">${escapeHtml(flavour)}</p>` : ''}
+						${data.favorite ? `<p class="help-text">Film del cuore: ${escapeHtml(movieName(data.favorite))}</p>` : ''}
+					</div>
+				</div>
+				<details class="settings-group">
+					<summary>Modifica il profilo</summary>
+					<form id="profile-form" class="form-grid profile-settings-form">
+						<div class="field"><label for="profile-name">Nome</label><input id="profile-name" name="name" type="text" maxlength="60" value="${escapeHtml(profile.name || '')}" autocomplete="given-name"></div>
+						<div class="field"><label for="profile-birthday">Compleanno</label><input id="profile-birthday" name="birthday" type="date" value="${escapeHtml(profile.birthday || '')}"></div>
+						<div class="field full">
+							<span class="field-label">Film del cuore</span>
+							<div class="movie-picker" data-movie-picker>
+								<input type="search" placeholder="Cerca il tuo film del cuore" aria-label="Cerca il tuo film del cuore" data-movie-picker-input>
+								<div class="movie-picker-results" data-movie-picker-results></div>
+							</div>
+						</div>
+						${selectField('place', 'Dove guardi di solito', PLACES, profile.place)}
+						${selectField('company', 'Con chi', COMPANY, profile.company)}
+						${selectField('popcorn', 'Popcorn', POPCORN, profile.popcorn)}
+						${selectField('language', 'Doppiato o sottotitoli', LANGUAGES, profile.language)}
+						${selectField('spectator', 'Che spettatore sei', SPECTATORS, profile.spectator)}
+						<div class="field"><label for="profile-director">Il regista che non sbaglia mai</label><input id="profile-director" name="director" type="text" maxlength="80" value="${escapeHtml(profile.director || '')}"></div>
+						<div class="button-row field full"><button class="button" type="submit">Salva il profilo</button></div>
+					</form>
+				</details>
+				<div class="profile-setting-row settings-mode">
+					<div>
+						<p class="field-label">Schede</p>
+						<span>${escapeHtml(modeTitle)}</span>
+						<p class="help-text">${escapeHtml(modeText)}${maskedKey ? ` Chiave: ${escapeHtml(maskedKey)}.` : ''}</p>
+						<div class="button-row">
+							${data.mode === 'light' ? '<button class="button secondary" type="button" data-settings-mode="full">Passa alla versione completa</button>' : ''}
+							${data.mode !== 'light' ? `<button class="button secondary" type="button" data-open-key>${data.mode === 'full' ? 'Cambia la chiave' : 'Inserisci la chiave'}</button>` : ''}
+							${data.mode !== 'light' ? '<button class="text-button" type="button" data-settings-mode="light">Torna alla versione light</button>' : ''}
+						</div>
+					</div>
+				</div>
 				<div class="profile-setting-row">
 					<div><p class="field-label">Aspetto</p><span data-theme-label>Modalità ${isNight ? 'notte' : 'giorno'}</span></div>
 					<button class="theme-toggle" type="button" role="switch" aria-checked="${isNight}" aria-label="Modalità notte" title="Passa alla modalità ${isNight ? 'giorno' : 'notte'}" data-theme-toggle>
@@ -753,6 +891,10 @@ export function createViews(context) {
 						</span>
 					</button>
 				</div>
+				<a class="profile-setting-row settings-link" href="#informazioni">
+					<div><p class="field-label">Informazioni</p><span>Fonti dei dati, privacy e licenze</span></div>
+					${icon('info')}
+				</a>
 				<div class="profile-setting-row">
 					<div><p class="field-label">Versione</p><span>myCimmena ${escapeHtml(APP_VERSION)}</span></div>
 				</div>
@@ -761,5 +903,39 @@ export function createViews(context) {
 		`;
 	}
 
-	return { minVotesLabel, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderCalendar, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
+	// Pagina "Informazioni" (PIANO.md, §14): fonti dei dati, privacy e licenze.
+	function renderInfo() {
+		return `
+			${pageHeader('Informazioni', `myCimmena ${APP_VERSION}`)}
+			<article class="info-page">
+				<section>
+					<h2 class="section-title">Da dove vengono i dati</h2>
+					<ul>
+						<li><strong>Ricerca e locandine:</strong> IMDb, attraverso un indirizzo pubblico non ufficiale. myCimmena non è collegata a IMDb.</li>
+						<li><strong>Dettagli</strong> (trama, regista, cast, episodi…): <a href="https://www.omdbapi.com/" target="_blank" rel="noopener noreferrer">OMDb API</a>, con la tua chiave personale. I dati di OMDb sono sotto licenza <a href="https://creativecommons.org/licenses/by-nc/4.0/" target="_blank" rel="noopener noreferrer">CC BY-NC 4.0</a>.</li>
+						<li><strong>Aggiornamenti dell'app:</strong> GitHub.</li>
+					</ul>
+				</section>
+				<section>
+					<h2 class="section-title">Privacy</h2>
+					<ul>
+						<li>Tutti i tuoi dati (watchlist, diario, profilo, chiave OMDb) restano su questo telefono. Non ci sono account né server con i tuoi dati.</li>
+						<li>L'app contatta solo IMDb, OMDb e GitHub, e il server delle segnalazioni quando ne invii una.</li>
+						<li>Nessuna pubblicità, nessuna statistica d'uso.</li>
+						<li>Disinstallando l'app o cancellandone i dati si perde tutto: per cambiare telefono o non rischiare, esporta un backup (arriva con il prossimo aggiornamento).</li>
+					</ul>
+				</section>
+				<section>
+					<h2 class="section-title">Licenze</h2>
+					<ul>
+						<li><a href="https://capacitorjs.com/" target="_blank" rel="noopener noreferrer">Capacitor</a> (MIT), per far girare l'app su Android.</li>
+						<li>Caratteri Montserrat e Spectral (SIL Open Font License); icone Material (Apache 2.0).</li>
+						<li>Codice dell'app: <a href="${escapeHtml(REPO_URL)}" target="_blank" rel="noopener noreferrer">github.com/dariotronic/mycimmena</a>.</li>
+					</ul>
+				</section>
+			</article>
+		`;
+	}
+
+	return { minVotesLabel, renderInfo, renderWatching, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderCalendar, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
 }

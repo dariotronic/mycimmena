@@ -54,7 +54,8 @@ export function posterButton(movie, className, extraClass = '') {
 
 // `saveHype` salva il voto dell'Hypometro e ricarica i dati; `onVotesChanged` (facoltativo) gira dopo ogni voto salvato:
 // la watchlist si riordina e rifiltra. `renderMyViewings` disegna "I miei voti" e `openViewing` apre il diario.
-export function createMovieInfo({ app, openImageLightbox, getData = () => ({ movies: [] }), saveHype, renderMyViewings = () => '', openViewing = () => {}, onVotesChanged = () => {} }) {
+// `renderSeries` disegna la sezione Episodi delle serie (series-ui.js); `onShow` gira a ogni apertura (dettagli OMDb, stagioni).
+export function createMovieInfo({ app, openImageLightbox, getData = () => ({ movies: [] }), saveHype, renderMyViewings = () => '', renderSeries = () => '', onShow = () => {}, openViewing = () => {}, onVotesChanged = () => {} }) {
 	const movieInfoDialog = document.getElementById('movie-info-dialog');
 	const movieInfoClose = document.getElementById('movie-info-close');
 	const movieInfoPoster = document.getElementById('movie-info-poster');
@@ -62,6 +63,7 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 	const movieInfoVote = document.getElementById('movie-info-vote');
 	const movieInfoDetails = document.getElementById('movie-info-details');
 	const movieInfoViewings = document.getElementById('movie-info-viewings');
+	const movieInfoSeries = document.getElementById('movie-info-series');
 	const movieInfoRegistry = new Map();
 	let movieInfoScrollPosition = null;
 
@@ -86,7 +88,7 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 	function showMovieInfo(movieId) {
 		// I dati più freschi del titolo (dopo un salvataggio l'oggetto registrato può essere vecchio).
 		const data = getData();
-		const movie = data.movies?.find(item => item.id === movieId)
+		const movie = data.movieById?.(movieId) || data.movies?.find(item => item.id === movieId)
 			|| data.viewings?.find(viewing => viewing.movieId === movieId)?.movie
 			|| movieInfoRegistry.get(movieId);
 		if (!movie) return;
@@ -94,13 +96,29 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 		movieInfoTitle.textContent = movieName(movie);
 		renderVote(movieId);
 		renderMovieInfoDetails(movie);
+		renderSeriesSection(movie);
 		renderViewings(movie);
+		const wasOpen = movieInfoDialog.open && movieInfoDialog.dataset.movieId === movieId;
 		movieInfoDialog.dataset.movieId = movieId;
+		if (!wasOpen) onShow(movie);
 		if (!movieInfoDialog.open) {
 			movieInfoScrollPosition = { left: window.scrollX, top: window.scrollY };
 			document.body.classList.add('modal-open');
 			movieInfoDialog.showModal();
 		}
+	}
+
+	function renderSeriesSection(movie) {
+		const html = contentType(movie) === 'series' ? renderSeries(movie) : '';
+		movieInfoSeries.innerHTML = html;
+		movieInfoSeries.hidden = !html;
+		movieInfoSeries.dataset.movieId = movie.id;
+		hydrateIcons(movieInfoSeries);
+	}
+
+	// Ridisegna la scheda aperta con i dati freschi (dopo un salvataggio o l'arrivo dei dettagli di OMDb).
+	function refreshMovieInfo() {
+		if (movieInfoDialog.open && movieInfoDialog.dataset.movieId) showMovieInfo(movieInfoDialog.dataset.movieId);
 	}
 
 	function renderViewings(movie) {
@@ -348,5 +366,5 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 		image.replaceWith(placeholder);
 	}, true);
 
-	return { infoButton, titleWithInfo };
+	return { infoButton, titleWithInfo, refreshMovieInfo };
 }

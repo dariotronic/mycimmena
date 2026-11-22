@@ -39,7 +39,15 @@ export const TOASTS = {
 	viewingUpdated: { enabled: true, message: 'Visione aggiornata' },
 	viewingDeleted: { enabled: true, message: 'Visione eliminata' },
 
+	// Serie TV
+	episodesMarked: { enabled: true, message: ({ label }) => (label ? `Visto: ${label}` : 'Episodi segnati') },
+	seriesStructureSaved: { enabled: true, message: 'Stagioni salvate' },
+	seriesRated: { enabled: true, message: 'Voto salvato nel diario' },
+
 	// Impostazioni
+	profileSaved: { enabled: true, message: 'Profilo salvato' },
+	keySaved: { enabled: true, message: 'Chiave OMDb attiva: le schede si completano da sole' },
+	modeChanged: { enabled: true, message: ({ mode }) => ({ light: 'Schede light', full: 'Schede complete', waiting: 'Schede complete in attesa della chiave' })[mode] || 'Modalità cambiata' },
 	themeChanged: { enabled: true, message: ({ mode }) => mode === 'night' ? 'Modalità notte' : 'Modalità giorno' }
 };
 

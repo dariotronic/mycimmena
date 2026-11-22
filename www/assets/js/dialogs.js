@@ -36,6 +36,14 @@ export function createDialogs({ app }) {
 		return showActionDialog({ title: 'Conferma operazione', message, submitText: 'Conferma' });
 	}
 
+	// Domanda con titolo e pulsante propri, per esempio "Hai finito la stagione 2!" / "Dai un voto".
+	function ask({ title, message, submitText = 'Sì', cancelText = 'Annulla' }) {
+		document.getElementById('action-dialog-cancel').textContent = cancelText;
+		return showActionDialog({ title, message, submitText }).finally(() => {
+			document.getElementById('action-dialog-cancel').textContent = 'Annulla';
+		});
+	}
+
 	actionDialogForm.addEventListener('submit', event => {
 		event.preventDefault();
 		finishActionDialog(true);
@@ -94,5 +102,5 @@ export function createDialogs({ app }) {
 	posterLightbox.addEventListener('click', event => {
 		if (event.target === posterLightbox) posterLightbox.close();
 	});
-	return { askConfirmation, openImageLightbox };
+	return { ask, askConfirmation, openImageLightbox };
 }

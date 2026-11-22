@@ -8,11 +8,11 @@ const freshStore = () => createStore({ indexedDB: new IDBFactory(), name: 'test'
 const alien = { id: 'tt0078748', title: 'Alien', year: 1979, type: 'movie', poster: 'https://m.media-amazon.com/images/M/a._V1_.jpg', stars: 'Sigourney Weaver' };
 const thing = { id: 'tt0084787', title: 'The Thing', year: '1982', type: 'movie' };
 
-test('creates every store of schema version 1 and starts empty', async () => {
+test('creates every store of the current schema and starts empty', async () => {
 	const store = freshStore();
 	const db = await store.open();
-	assert.equal(SCHEMA_VERSION, 1);
-	assert.deepEqual([...db.objectStoreNames].sort(), ['kv', 'movies', 'posters', 'viewings', 'watchlist']);
+	assert.equal(SCHEMA_VERSION, 2);
+	assert.deepEqual([...db.objectStoreNames].sort(), ['kv', 'movies', 'posters', 'series', 'viewings', 'watchlist']);
 	const state = await store.loadAll();
 	assert.equal(state.movies.size, 0);
 	assert.deepEqual(state.watchlist, []);

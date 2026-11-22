@@ -80,7 +80,9 @@ test('has no server calls, login, push or social features left', () => {
 
 test('handles the Android back button: dialog, then menu, then previous view, then background', () => {
 	const source = read('../www/assets/js/back-button.js');
-	assert.match(read('../www/script.js'), /initBackButton\(\{ closeMenu: navigation\.closeMenu \}\)/);
+	assert.match(read('../www/script.js'), /initBackButton\(\{ closeMenu: navigation\.closeMenu, onBack: \(\) => onboarding\.handleBack\(\) \}\)/);
+	// Durante l'onboarding il tasto torna al passaggio precedente, prima di tutto il resto.
+	assert.match(source, /if \(onBack\(\)\) return;/);
 	assert.ok(JSON.parse(read('../package.json')).dependencies['@capacitor/app']);
 	const order = ["dialog[open]", 'closeMenu()', 'history.back()', 'minimizeApp()'].map(text => source.indexOf(text));
 	assert.ok(order.every(index => index >= 0) && order.every((index, i) => !i || index > order[i - 1]));

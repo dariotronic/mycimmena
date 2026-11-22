@@ -463,11 +463,13 @@ Alla fine della Fase 0 l'app si apre con dati vuoti: ogni modifica risponde "Non
 - [x] Prova completa sul telefono: ricerca, aggiunta, hype, serata, diario, modifica ed eliminazione
 
 **Fase 2: onboarding, OMDb e serie**
-- [ ] Schermate dell'onboarding (§4) con ripresa dal punto lasciato
-- [ ] Chiave OMDb: browser interno, appunti, verifica
-- [ ] Stati light, completa e in attesa con il banner; completamento in sottofondo
-- [ ] Serie TV: struttura da OMDb e personalizzata, avanzamento, "Stai guardando", voti per sessione, stagione e serie
-- [ ] Impostazioni, pagina Informazioni e credit
+- [x] Schermate dell'onboarding (§4) con ripresa dal punto lasciato; il passaggio dell'importazione per ora spiega solo come scaricare i file (l'importazione è in Fase 3)
+- [x] Chiave OMDb: browser interno, appunti, verifica
+- [x] Stati light, completa e in attesa con il banner; completamento in sottofondo
+- [x] Serie TV: struttura da OMDb e personalizzata, avanzamento, "Stai guardando", voti per sessione, stagione e serie (schema IndexedDB versione 2, store `series`)
+- [x] Impostazioni, pagina Informazioni e credit
+- [x] Auguri in Home il giorno del compleanno, con il film del cuore
+- [x] Prova con una chiave OMDb vera sul telefono: verifica, completamento in sottofondo, dettagli, struttura delle stagioni e titoli degli episodi scaricati quando si apre la stagione. Le trame di OMDb sono in inglese.
 
 **Fase 3: backup, importazione e distribuzione**
 - [ ] Esportazione e importazione del backup (sostituisci/unisci), promemoria
@@ -503,7 +505,7 @@ Proposte; ne sceglierei 3 o 4, tutte saltabili, sulla stessa schermata. Le prime
 | **Che spettatore sei?** | "Arrivo ai titoli di coda" · "Mi addormento al secondo tempo" · "Commento tutto" · "Guai a chi parla" | Solo flavour: compare sotto il nome in Impostazioni |
 | **Il regista che non sbaglia mai?** | Testo libero | Solo flavour; in Fase 5 le statistiche lo confrontano con i registi più visti davvero |
 
-Proposta: **film del cuore, dove, con chi, popcorn**.
+**Decise: tutte.** Stanno in una sola schermata, "Due chiacchiere", tutte saltabili (www/assets/js/profile.js).
 
 ### Altro
 - **Icona:** logo del Club ricolorato con la tavolozza "my", oppure una variante con "my" ben visibile.

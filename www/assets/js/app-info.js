@@ -5,3 +5,4 @@ export const APP_VERSION = '0.1.0';
 // Credit in fondo alle Impostazioni (PIANO.md, §14).
 export const CREDIT_HANDLE = '@dariotronic';
 export const CREDIT_URL = 'https://www.instagram.com/dariotronic/';
+export const REPO_URL = 'https://github.com/dariotronic/mycimmena';

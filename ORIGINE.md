@@ -35,7 +35,7 @@ Da allora le due repo vanno ognuna per conto suo. Quando si corregge qualcosa in
 - Chiavi di `localStorage` da `clubdelcimmena-*` a `mycimmena-*`.
 - Modalità colore "giorno" e "notte" al posto di "colonizzatore" e "colonizzato".
 - Testi del cineforum ("Il prossimo cineforum", "Quando ci vediamo?", "Solo horror e sci-fi, pls.") resi neutri.
-- Nuovi: `boot.js` (tema salvato e controllo della WebView), `app-info.js` (versione e credit), `back-button.js`, `store.js`, `app-data.js`, `imdb.js`, `posters.js`, `diary.js`, `sanitize.js`, i test in `tests/` oltre a `frontend.test.js`, `tools/serve.js`.
+- Nuovi: `boot.js` (tema salvato e controllo della WebView), `app-info.js` (versione e credit), `back-button.js`, `store.js`, `app-data.js`, `imdb.js`, `posters.js`, `diary.js`, `sanitize.js`, `omdb.js`, `details.js`, `series.js`, `series-ui.js`, `onboarding.js`, `settings.js`, `key-setup.js`, `movie-picker.js`, `profile.js`, i test in `tests/` oltre a `frontend.test.js`, `tools/serve.js`.
 
 ## Correzioni riportate
 

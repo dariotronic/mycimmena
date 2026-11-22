@@ -11,7 +11,8 @@ import { createViews } from '../www/assets/js/views.js';
 // I controlli sul codice sorgente li leggono insieme, così non dipendono dal file in cui sta una funzione.
 const APP_MODULES = [
 	'theme', 'navigation', 'dialogs', 'movie-info', 'undo', 'diary', 'meeting', 'randomizer', 'watchlist',
-	'search', 'review-editor', 'lightbox-zoom', 'store', 'posters', 'imdb', 'app-data'
+	'search', 'review-editor', 'lightbox-zoom', 'store', 'posters', 'imdb', 'app-data', 'series', 'series-ui', 'details',
+	'omdb', 'onboarding', 'settings', 'key-setup', 'movie-picker', 'profile'
 ];
 const readAppScripts = () => ['../www/script.js', ...APP_MODULES.map(name => `../www/assets/js/${name}.js`)]
 	.map(path => readFileSync(new URL(path, import.meta.url), 'utf8'))

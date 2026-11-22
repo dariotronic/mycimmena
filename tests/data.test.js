@@ -37,7 +37,8 @@ test('builds the view data from the store: watchlist with personal hype, planned
 	// Dalla più recente; una visione di un titolo sparito dal catalogo non si mostra.
 	assert.deepEqual(data.viewings.map(viewing => viewing.id), ['c', 'b', 'a']);
 	assert.equal(data.viewings[0].movie.director, 'John Carpenter');
-	assert.deepEqual(buildAppData(null), { movies: [], upcoming: null, viewings: [] });
+	const empty = buildAppData(null);
+	assert.deepEqual([empty.movies, empty.upcoming, empty.viewings, empty.watching, empty.mode, empty.favorite], [[], null, [], [], 'light', null]);
 	assert.equal(viewMovie(catalog.get('tt1')).stars, 'Sigourney Weaver');
 });
 

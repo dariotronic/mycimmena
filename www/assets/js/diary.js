@@ -13,7 +13,7 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 	let initialSnapshot = '';
 	let scrollPosition = null;
 
-	const findMovie = movieId => getData().movies.find(movie => movie.id === movieId)
+	const findMovie = movieId => getData().movieById?.(movieId) || getData().movies.find(movie => movie.id === movieId)
 		|| getData().viewings.find(viewing => viewing.movieId === movieId)?.movie
 		|| getData().upcoming?.movies?.find(movie => movie.id === movieId)
 		|| null;
@@ -21,8 +21,9 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 	const snapshot = target => (target ? JSON.stringify([...new FormData(target).entries(), target.querySelector('[data-review-editor]')?.innerHTML || '']) : '');
 	const isDirty = () => Boolean(form()) && snapshot(form()) !== initialSnapshot;
 
-	// `movieId` per una visione nuova, `viewingId` per modificarne una esistente.
-	function openViewingForm({ movieId = null, viewingId = null }) {
+	// `movieId` per una visione nuova, `viewingId` per modificarne una esistente. Per le serie `scope` 'season' (con
+	// `season`) o 'series' apre il voto a una stagione o a tutta la serie.
+	function openViewingForm({ movieId = null, viewingId = null, scope = null, season = null }) {
 		const viewing = viewingId ? getData().viewings.find(item => item.id === viewingId) : null;
 		const movie = viewing?.movie || findMovie(movieId);
 		if (!movie) {
@@ -30,8 +31,8 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 			return;
 		}
 		const inWatchlist = getData().movies.some(item => item.id === movie.id);
-		dialogTitle.textContent = viewing ? 'Modifica la visione' : 'Segna come visto';
-		dialogBody.innerHTML = viewRenderer.renderViewingForm({ movie, viewing, inWatchlist });
+		dialogTitle.textContent = viewing ? 'Modifica la visione' : scope ? 'Il tuo voto' : 'Segna come visto';
+		dialogBody.innerHTML = viewRenderer.renderViewingForm({ movie, viewing, inWatchlist, scope, season });
 		hydrateIcons(dialogBody);
 		const target = form();
 		updateReviewRating(target);
@@ -70,7 +71,8 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 			place: String(data.get('place') || ''),
 			withWhom: String(data.get('withWhom') || ''),
 			rating: String(data.get('rating') || ''),
-			notes: editor.innerHTML
+			notes: editor.innerHTML,
+			...(target.dataset.scope ? { scope: target.dataset.scope, season: target.dataset.season ? Number(target.dataset.season) : null } : {})
 		};
 		const submit = target.querySelector('button[type="submit"]');
 		submit.disabled = true;
@@ -80,8 +82,10 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 				showToast('viewingUpdated');
 			} else {
 				const removeFromWatchlist = data.get('removeFromWatchlist') === 'on';
+				if (input.scope) input.round = getData().seriesOf?.(input.movieId)?.round || 1;
 				await store.addViewing(input, { removeFromWatchlist });
-				showToast('viewingSaved', { removed: removeFromWatchlist });
+				if (input.scope) showToast('seriesRated');
+				else showToast('viewingSaved', { removed: removeFromWatchlist });
 			}
 			await closeDialog({ confirm: false });
 			await refresh();

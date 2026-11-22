@@ -24,6 +24,10 @@ import { createMeeting } from './assets/js/meeting.js';
 import { createWatchlist } from './assets/js/watchlist.js';
 import { createSearch } from './assets/js/search.js';
 import { initBackButton } from './assets/js/back-button.js';
+import { createDetails } from './assets/js/details.js';
+import { createSeriesUi, renderSeriesSection } from './assets/js/series-ui.js';
+import { createOnboarding } from './assets/js/onboarding.js';
+import { createSettings } from './assets/js/settings.js';
 
 hydrateIcons(document);
 
@@ -35,12 +39,25 @@ const getData = () => data;
 
 initColorMode();
 const navigation = createNavigation({ app });
-initBackButton({ closeMenu: navigation.closeMenu });
-const { askConfirmation, openImageLightbox } = createDialogs({ app });
+initBackButton({ closeMenu: navigation.closeMenu, onBack: () => onboarding.handleBack() });
+const { ask, askConfirmation, openImageLightbox } = createDialogs({ app });
 // Le locandine scaricate in sottofondo compaiono al ridisegno successivo, senza interrompere chi sta scrivendo.
 const posters = createPosters({ store, onSaved: () => { rebuildData(); renderWhenIdle(); } });
+// Dettagli da OMDb (modalità completa): quando arrivano si rileggono i dati e si aggiornano vista e scheda aperta.
+const details = createDetails({
+	store,
+	getState: () => state,
+	onChange: async () => {
+		await loadData();
+		renderWhenIdle();
+		refreshMovieInfo();
+		settings.updateBanner();
+	},
+	onProgress: progress => settings.showProgress(progress),
+	notify: message => showToast('error', { message })
+});
 // Watchlist e diario si creano più sotto: le funzioni li usano solo dopo un'azione, quando esistono già.
-const { infoButton, titleWithInfo } = createMovieInfo({
+const { infoButton, titleWithInfo, refreshMovieInfo } = createMovieInfo({
 	app,
 	openImageLightbox,
 	getData,
@@ -49,6 +66,12 @@ const { infoButton, titleWithInfo } = createMovieInfo({
 		await loadData();
 	},
 	renderMyViewings: movie => viewRenderer.renderMyViewings(movie),
+	renderSeries: movie => renderSeriesSection(movie, data.seriesOf(movie.id), { mode: data.mode }),
+	// All'apertura della scheda: dettagli da OMDb se mancano, e per le serie la prima stagione e quella in corso.
+	onShow: movie => {
+		details.ensure(movie.id);
+		if (movie.type === 'series') details.ensureSeasons(movie.id, [1, data.seriesOf(movie.id).next?.s || 1]);
+	},
 	openViewing: target => diary.openViewingForm(target),
 	onVotesChanged: () => watchlist.updateWatchlistRows()
 });
@@ -89,8 +112,17 @@ const diary = createDiary({
 	getData,
 	viewRenderer,
 	askConfirmation,
-	refresh: async () => {
-		await loadData();
+	refresh
+});
+createSeriesUi({ app, store, details, getData, refresh, ask, askConfirmation, openViewing: target => diary.openViewingForm(target), refreshMovieInfo });
+const settings = createSettings({ store, details, getData, refresh });
+const onboarding = createOnboarding({
+	store,
+	details,
+	getData,
+	refresh: loadData,
+	onFinish: () => {
+		location.hash = '#lista';
 		render();
 	}
 });
@@ -120,6 +152,8 @@ const search = createSearch({
 		const added = await store.addToWatchlist(movies);
 		await loadData();
 		posters.ensure([...state.movies.values()].filter(movie => added.includes(movie.id)));
+		// In modalità completa i dettagli dei titoli appena aggiunti arrivano subito, in sottofondo.
+		details.complete(added);
 		return added.length;
 	},
 	getWatchlistType: watchlist.getWatchlistType,
@@ -128,6 +162,13 @@ const search = createSearch({
 	infoButton,
 	titleWithInfo
 });
+
+// Dopo un salvataggio: dati riletti, vista ridisegnata, scheda aperta aggiornata.
+async function refresh() {
+	await loadData();
+	render();
+	refreshMovieInfo();
+}
 
 function rebuildData() {
 	data = buildAppData(state, { posterUrlFor: localPosterUrl });
@@ -145,7 +186,7 @@ async function loadData() {
 	rebuildData();
 }
 
-const ROUTE_TITLES = { home: 'Home', calendario: 'Serata', diario: 'Diario', prossimi: 'Randomizer', lista: 'Watchlist', impostazioni: 'Impostazioni' };
+const ROUTE_TITLES = { home: 'Home', calendario: 'Serata', diario: 'Diario', prossimi: 'Randomizer', lista: 'Watchlist', impostazioni: 'Impostazioni', informazioni: 'Informazioni' };
 // Nomi delle pagine sul sito: un link salvato porta comunque alla pagina giusta.
 const OLD_ROUTES = { profilo: 'impostazioni', archivio: 'diario' };
 
@@ -161,8 +202,11 @@ function render() {
 		diario: viewRenderer.renderDiary,
 		prossimi: viewRenderer.renderComingFilms,
 		lista: viewRenderer.renderMovieList,
-		impostazioni: viewRenderer.renderSettings
+		impostazioni: viewRenderer.renderSettings,
+		informazioni: viewRenderer.renderInfo
 	};
+	onboarding.render();
+	settings.updateBanner();
 	app.innerHTML = (views[route()] || viewRenderer.renderHome)();
 	hydrateIcons(app);
 	document.querySelectorAll('.touch-nav a').forEach(link => {
@@ -220,6 +264,7 @@ function bindViewEvents() {
 	randomizer.bind();
 	search.bind(route());
 	diary.bind();
+	settings.bind();
 }
 
 // Cambio di vista accessibile: <main> non è una regione aria-live (lo screen reader rileggerebbe tutta la pagina
@@ -256,4 +301,6 @@ window.addEventListener('online', () => state && posters.ensure([...state.movies
 	await loadData();
 	render();
 	if (state) posters.ensure([...state.movies.values()]);
+	// Modalità completa: si completano in sottofondo le schede dei titoli salvati senza dettagli.
+	details.complete();
 })();

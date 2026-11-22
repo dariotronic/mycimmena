@@ -1,16 +1,20 @@
 // Negozio dati dell'app: tutto quello che l'utente salva sta qui, in IndexedDB, sul telefono (PIANO.md, §2 e §3).
 // Le viste non toccano mai IndexedDB: chiamano queste funzioni, che restituiscono promesse.
 //
-// Store (versione 1 dello schema):
-// - movies     catalogo dei titoli conosciuti, per id IMDb: { id, title, year, type, posterUrl, stars, details, detailsFetchedAt }
+// Store (versione 2 dello schema):
+// - movies     catalogo dei titoli conosciuti, per id IMDb: { id, title, year, type, posterUrl, stars, details (OMDb),
+//              detailsFetchedAt, seasons (struttura delle stagioni delle serie, vedi series.js) }
 // - watchlist  { movieId, addedAt, hype (0–5 o null), note }
-// - viewings   il diario: { id, movieId, date, place, withWhom, rating (0,5–10 o null), notes (HTML filtrato), createdAt, updatedAt }
+// - viewings   il diario: { id, movieId, date, place, withWhom, rating (0,5–10 o null), notes (HTML filtrato), createdAt, updatedAt;
+//              per le serie anche episodes [{ s, e }], scope ('episodes' | 'season' | 'series'), season, round }
 // - posters    locandine salvate per vederle offline: { movieId, blob, savedAt }
-// - kv         record singoli per chiave: 'planned' (la serata in programma), 'meta', e dalla Fase 2 'profile' e 'settings'
+// - kv         record singoli per chiave: 'planned' (la serata in programma), 'profile', 'settings', 'onboarding', 'meta'
+// - series     avanzamento delle serie (dalla versione 2): { movieId, status, round, startedAt, updatedAt }
 import { sanitizeNotes } from './sanitize.js';
+import { normalizeEpisodes, SERIES_STATUSES } from './series.js';
 
 export const DB_NAME = 'mycimmena';
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 // Migrazioni in ordine: la funzione di indice N porta lo schema dalla versione N alla N+1.
 // Per cambiare lo schema si aggiunge una funzione in fondo e si alza SCHEMA_VERSION; quelle vecchie non si toccano.
@@ -23,10 +27,14 @@ const MIGRATIONS = [
 		viewings.createIndex('date', 'date');
 		db.createObjectStore('posters', { keyPath: 'movieId' });
 		db.createObjectStore('kv', { keyPath: 'key' });
+	},
+	// 1 → 2: avanzamento delle serie TV (Fase 2).
+	db => {
+		db.createObjectStore('series', { keyPath: 'movieId' });
 	}
 ];
 
-const STORES = ['movies', 'watchlist', 'viewings', 'posters', 'kv'];
+const STORES = ['movies', 'watchlist', 'viewings', 'posters', 'kv', 'series'];
 const IMDB_ID = /^tt[0-9]{1,20}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -57,7 +65,8 @@ export function normalizeMovie(movie) {
 		posterUrl: /^https:\/\//.test(String(movie.posterUrl || movie.poster || '')) ? String(movie.posterUrl || movie.poster) : '',
 		stars: String(movie.stars || '').slice(0, 300),
 		details: movie.details && typeof movie.details === 'object' ? movie.details : null,
-		detailsFetchedAt: movie.detailsFetchedAt || null
+		detailsFetchedAt: movie.detailsFetchedAt || null,
+		seasons: movie.seasons && typeof movie.seasons === 'object' ? movie.seasons : null
 	};
 }
 
@@ -66,6 +75,8 @@ const validRating = value => (value === null || value === undefined || value ===
 const validHype = value => (value === null || value === undefined ? null
 	: (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 5 ? Number(value) : undefined));
 const cleanText = (value, max) => String(value ?? '').trim().slice(0, max) || null;
+const SCOPES = ['episodes', 'season', 'series'];
+const positiveInt = value => (Number.isInteger(Number(value)) && Number(value) >= 1 ? Number(value) : null);
 
 // Visione pronta da salvare, con i controlli che il server del sito faceva sulle recensioni.
 export function normalizeViewing(input, existing = null) {
@@ -85,8 +96,22 @@ export function normalizeViewing(input, existing = null) {
 		withWhom: cleanText(input.withWhom, 120),
 		rating,
 		notes: notes.html,
+		...seriesFields(input, existing),
 		createdAt: existing?.createdAt || input.createdAt || stamp,
 		updatedAt: stamp
+	};
+}
+
+// Campi delle visioni delle serie: solo se ci sono (i film non li hanno).
+function seriesFields(input, existing) {
+	const scope = SCOPES.includes(input.scope) ? input.scope : (existing?.scope || null);
+	if (!scope) return {};
+	const episodes = normalizeEpisodes(input.episodes ?? existing?.episodes);
+	return {
+		scope,
+		episodes: scope === 'episodes' ? episodes : [],
+		season: scope === 'season' ? positiveInt(input.season ?? existing?.season) : null,
+		round: positiveInt(input.round ?? existing?.round) || 1
 	};
 }
 
@@ -136,11 +161,129 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 
 	// Tutto quello che serve alle viste, in una lettura sola. Le locandine restano fuori: le carica posters.js.
 	async function loadAll() {
-		return transaction(['movies', 'watchlist', 'viewings', 'kv'], 'readonly', async ({ movies, watchlist, viewings, kv }) => {
-			const [movieList, watchlistEntries, viewingList, planned, meta] = await Promise.all([
-				request(movies.getAll()), request(watchlist.getAll()), request(viewings.getAll()), getKv(kv, 'planned'), getKv(kv, 'meta')
+		return transaction(['movies', 'watchlist', 'viewings', 'kv', 'series'], 'readonly', async ({ movies, watchlist, viewings, kv, series }) => {
+			const [movieList, watchlistEntries, viewingList, seriesList, planned, meta, profile, settings, onboarding] = await Promise.all([
+				request(movies.getAll()), request(watchlist.getAll()), request(viewings.getAll()), request(series.getAll()),
+				getKv(kv, 'planned'), getKv(kv, 'meta'), getKv(kv, 'profile'), getKv(kv, 'settings'), getKv(kv, 'onboarding')
 			]);
-			return { movies: new Map(movieList.map(movie => [movie.id, movie])), watchlist: watchlistEntries, viewings: viewingList, planned, meta };
+			return {
+				movies: new Map(movieList.map(movie => [movie.id, movie])),
+				watchlist: watchlistEntries,
+				viewings: viewingList,
+				series: new Map(seriesList.map(record => [record.movieId, record])),
+				planned, meta, profile, settings, onboarding
+			};
+		});
+	}
+
+	// Record singoli: profilo, impostazioni, stato dell'onboarding. `patch` si unisce al valore salvato.
+	const KV_KEYS = ['profile', 'settings', 'onboarding', 'meta'];
+	async function updateKv(key, patch) {
+		if (!KV_KEYS.includes(key)) throw new Error(`Chiave sconosciuta: ${key}`);
+		return transaction('kv', 'readwrite', async ({ kv }) => {
+			const next = { ...(await getKv(kv, key) || {}), ...patch };
+			await putKv(kv, key, next);
+			return next;
+		});
+	}
+
+	// Titolo nel catalogo senza aggiungerlo alla watchlist (per esempio il film del cuore).
+	async function saveMovie(movie) {
+		const item = normalizeMovie(movie);
+		return transaction('movies', 'readwrite', async ({ movies }) => {
+			const known = await request(movies.get(item.id));
+			const next = known ? { ...known, ...item, details: known.details || item.details, detailsFetchedAt: known.detailsFetchedAt || item.detailsFetchedAt, seasons: known.seasons || item.seasons } : item;
+			await request(movies.put(next));
+			return next;
+		});
+	}
+
+	// Dettagli di OMDb (omdb.js li normalizza). Se OMDb dice che è una serie, il tipo si aggiorna.
+	async function saveDetails(movieId, details) {
+		return transaction('movies', 'readwrite', async ({ movies }) => {
+			const movie = await request(movies.get(movieId));
+			if (!movie) return null;
+			const next = { ...movie, details, detailsFetchedAt: new Date().toISOString(), type: details?.type || movie.type };
+			await request(movies.put(next));
+			return next;
+		});
+	}
+
+	async function saveSeasons(movieId, seasons) {
+		return transaction('movies', 'readwrite', async ({ movies }) => {
+			const movie = await request(movies.get(movieId));
+			if (!movie) throw new Error('Titolo sconosciuto.');
+			await request(movies.put({ ...movie, seasons }));
+			return seasons;
+		});
+	}
+
+	async function currentSeries(series, movieId) {
+		return await request(series.get(movieId)) || null;
+	}
+
+	// Segna episodi visti in una data: si aggiungono alla sessione di quel giorno del giro corrente, o ne aprono una nuova.
+	// La serie passa "in corso" ed esce dalla watchlist (e dalla serata in programma).
+	async function markEpisodes(movieId, episodes, { date }) {
+		if (!DATE.test(String(date || ''))) throw new Error('Data non valida.');
+		const list = normalizeEpisodes(episodes);
+		if (!list.length) throw new Error('Nessun episodio da segnare.');
+		return transaction(['movies', 'viewings', 'series', 'watchlist', 'kv'], 'readwrite', async ({ movies, viewings, series, watchlist, kv }) => {
+			if (!(await request(movies.get(movieId)))) throw new Error('Titolo sconosciuto.');
+			const stamp = new Date().toISOString();
+			const record = await currentSeries(series, movieId) || { movieId, status: 'watching', round: 1, startedAt: stamp };
+			const round = record.round || 1;
+			const sameDay = (await request(viewings.index('movieId').getAll(movieId)))
+				.find(viewing => viewing.scope === 'episodes' && viewing.date === date && (viewing.round || 1) === round);
+			const viewing = sameDay
+				? { ...sameDay, episodes: normalizeEpisodes([...(sameDay.episodes || []), ...list]), updatedAt: stamp }
+				: normalizeViewing({ movieId, date, scope: 'episodes', episodes: list, round });
+			await request(viewings.put(viewing));
+			// Segnare un episodio rimette la serie in corso (anche se era finita e sono arrivate stagioni nuove):
+			// se con questo è finita davvero, la scheda la segna "Finita" subito dopo (series-ui.js).
+			const nextRecord = { ...record, status: 'watching', updatedAt: stamp };
+			await request(series.put(nextRecord));
+			await request(watchlist.delete(movieId));
+			const planned = await getKv(kv, 'planned');
+			if (planned?.movieIds?.includes(movieId)) await putKv(kv, 'planned', { ...planned, movieIds: planned.movieIds.filter(id => id !== movieId) });
+			return { viewing, series: nextRecord };
+		});
+	}
+
+	// Toglie il segno a degli episodi del giro corrente. Una sessione rimasta senza episodi, voto e note sparisce.
+	async function unmarkEpisodes(movieId, episodes) {
+		const keys = new Set(normalizeEpisodes(episodes).map(({ s, e }) => `${s}-${e}`));
+		return transaction(['viewings', 'series'], 'readwrite', async ({ viewings, series }) => {
+			const round = (await currentSeries(series, movieId))?.round || 1;
+			const sessions = (await request(viewings.index('movieId').getAll(movieId)))
+				.filter(viewing => viewing.scope === 'episodes' && (viewing.round || 1) === round);
+			for (const viewing of sessions) {
+				const remaining = (viewing.episodes || []).filter(({ s, e }) => !keys.has(`${s}-${e}`));
+				if (remaining.length === (viewing.episodes || []).length) continue;
+				if (!remaining.length && !viewing.rating && !viewing.notes) await request(viewings.delete(viewing.id));
+				else await request(viewings.put({ ...viewing, episodes: remaining, updatedAt: new Date().toISOString() }));
+			}
+		});
+	}
+
+	async function setSeriesStatus(movieId, status) {
+		if (!(status in SERIES_STATUSES)) throw new Error('Stato della serie non valido.');
+		return transaction('series', 'readwrite', async ({ series }) => {
+			const stamp = new Date().toISOString();
+			const record = { ...(await currentSeries(series, movieId) || { movieId, round: 1, startedAt: stamp }), status, updatedAt: stamp };
+			await request(series.put(record));
+			return record;
+		});
+	}
+
+	// "Ricomincia da capo": nuovo giro, il precedente resta nel diario.
+	async function restartSeries(movieId) {
+		return transaction('series', 'readwrite', async ({ series }) => {
+			const stamp = new Date().toISOString();
+			const previous = await currentSeries(series, movieId);
+			const record = { movieId, status: 'watching', round: (previous?.round || 0) + 1, startedAt: stamp, updatedAt: stamp };
+			await request(series.put(record));
+			return record;
 		});
 	}
 
@@ -273,7 +416,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	}
 
 	return {
-		open, close, loadAll, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
+		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, setSeriesStatus, restartSeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
 		addViewing, updateViewing, deleteViewing, getPoster, savePoster, posterIds, requestPersistence, STORES
 	};
 }
