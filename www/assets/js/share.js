@@ -3,7 +3,6 @@ import { POSTER_CARD_WIDTH, sizedPosterUrl } from './movie-info.js';
 function loadSharePoster(movie) {
 	const sources = [];
 	if (movie.poster_local) sources.push(movie.poster_local);
-	else if (/^tt[0-9]{1,20}$/.test(movie.id || '') && movie.poster_cached === true) sources.push(`api/poster.php?i=${encodeURIComponent(movie.id)}`);
 	const remote = sizedPosterUrl(movie.poster, POSTER_CARD_WIDTH);
 	if (remote && !sources.includes(remote)) sources.push(remote);
 	return new Promise(resolve => {

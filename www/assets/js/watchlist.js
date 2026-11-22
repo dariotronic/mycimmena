@@ -1,18 +1,18 @@
 // Watchlist: filtri (tipo, punteggio minimo dei voti, vista a righe o a schede), ordinamento
 // e rimozione annullabile.
 import { contentType } from './domain.js';
-import { HYPE_POINTS_EMOJI, HYPE_TITLE, watchlistVotes } from './hype.js';
-import { apiRequest } from './api.js';
+import { HYPE_LEVELS, HYPE_TITLE, watchlistVotes } from './hype.js';
 import { hydrateIcons, setIcon } from './icons.js';
 
 const WATCHLIST_VIEW_KEY ='mycimmena-watchlist-view';
 const WATCHLIST_CARDS_PER_ROW_KEY = 'mycimmena-watchlist-cards-per-row';
 const WATCHLIST_MOBILE_CARDS_PER_ROW_KEY = 'mycimmena-watchlist-mobile-cards-per-row';
 
-export function createWatchlist({ getData, viewRenderer, scheduleMovie, clearSelectedMovie, runUndoable, refreshSearchResults }) {
+// `commitRemoval` salva la rimozione di un titolo (store.js), quando non è più annullabile.
+export function createWatchlist({ getData, viewRenderer, scheduleMovie, clearSelectedMovie, runUndoable, refreshSearchResults, commitRemoval }) {
 	const watchlistFilterDialog = document.getElementById('watchlist-filter-dialog');
 	let watchlistType = '';
-	// Punteggio minimo (somma dei voti) per restare in elenco; 0 = nessun filtro.
+	// Hypometro minimo per restare in elenco; 0 = nessun filtro.
 	let watchlistMinVotes = 0;
 	let watchlistView = localStorage.getItem(WATCHLIST_VIEW_KEY) === 'cards' ? 'cards' : 'list';
 	const savedCardsPerRow = Number(localStorage.getItem(WATCHLIST_CARDS_PER_ROW_KEY));
@@ -65,8 +65,8 @@ export function createWatchlist({ getData, viewRenderer, scheduleMovie, clearSel
 	function showMinVotes() {
 		const slider = document.getElementById('watchlist-min-votes');
 		const output = document.getElementById('watchlist-min-votes-value');
-		if (output) output.value = watchlistMinVotes ? `Almeno ${watchlistMinVotes} ${HYPE_POINTS_EMOJI}` : 'Tutti';
-		slider?.setAttribute('aria-valuetext', watchlistMinVotes ? `Almeno ${watchlistMinVotes} ${watchlistMinVotes === 1 ? 'punto' : 'punti'}` : 'Tutti');
+		if (output) output.value = watchlistMinVotes ? `Almeno ${HYPE_LEVELS[watchlistMinVotes]?.emoji || watchlistMinVotes}` : 'Tutti';
+		slider?.setAttribute('aria-valuetext', watchlistMinVotes ? `Almeno «${HYPE_LEVELS[watchlistMinVotes]?.label}»` : 'Tutti');
 	}
 	document.getElementById('watchlist-min-votes')?.addEventListener('input', event => {
 		watchlistMinVotes = Number(event.currentTarget.value);
@@ -202,7 +202,7 @@ export function createWatchlist({ getData, viewRenderer, scheduleMovie, clearSel
 				clearSelectedMovie(id);
 			},
 			revert: () => getData().movies.splice(Math.min(index, getData().movies.length), 0, removed),
-			commit: keepalive => apiRequest(`api/movies.php?id=${encodeURIComponent(id)}`, { method: 'DELETE', keepalive })
+			commit: () => commitRemoval(id)
 		});
 	}
 

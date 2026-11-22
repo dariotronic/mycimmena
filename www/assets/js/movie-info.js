@@ -1,13 +1,12 @@
-// Locandine, pulsante (i) e scheda del film. La scheda chiede i dettagli ad api/movie.php alla prima apertura.
+// Locandine, pulsante (i) e scheda del titolo: dati di IMDb (dalla Fase 2 anche OMDb), Hypometro e "I miei voti".
 import { contentType, escapeHtml, movieName } from './domain.js';
-import { formatVoteTotal, HYPE_LEVELS, HYPE_MAX, HYPE_MEMBERS_EMOJI, HYPE_POINTS_EMOJI, HYPE_TITLE, hypeLevel, watchlistVotes } from './hype.js';
-import { apiRequest } from './api.js';
-import { icon } from './icons.js';
+import { HYPE_LEVELS, HYPE_MAX, HYPE_TITLE, hypeLevel, watchlistVotes } from './hype.js';
+import { hydrateIcons, icon } from './icons.js';
 import { showErrorToast } from './toasts.js';
 
 export const movieDetails = movie => {
-	const directorLine = movie.director ? `<p class="movie-director">${escapeHtml(movie.director)}</p>` : '';
-	return directorLine;
+	const line = movie.director || movie.stars;
+	return line ? `<p class="movie-director">${escapeHtml(line)}</p>` : '';
 };
 
 // Le locandine di IMDb si possono chiedere già ridimensionate: ._V1_SX<larghezza>.jpg. L'originale senza misura
@@ -20,17 +19,13 @@ export function sizedPosterUrl(url, width) {
 	return value.replace(/\._V1_[^/?#]*\.(jpe?g|png)$/i, `._V1_SX${width}.$1`);
 }
 
-// Miniatura per card e righe: la copia locale (file statico in assets/posters/, in cache su Cloudflare), altrimenti
-// la versione ridimensionata di IMDb. Con original === true (scheda del film) l'immagine porta anche data-full,
+// Miniatura per card e righe: la copia salvata sul telefono (URL blob: di posters.js), altrimenti la versione
+// ridimensionata di IMDb. Con original === true (scheda del titolo) l'immagine porta anche data-full,
 // la versione grande che il lightbox carica sopra la miniatura già visibile.
 export function poster(movie, className = 'movie-poster', original = false) {
 	const full = original === true;
-	const validId = /^tt[0-9]{1,20}$/.test(movie.id || '');
 	const remote = sizedPosterUrl(movie.poster, POSTER_CARD_WIDTH);
-	let source = movie.poster_local || '';
-	if (!source && validId && original === 'preview') source = `api/poster.php?i=${encodeURIComponent(movie.id)}&preview=1`;
-	else if (!source && validId && movie.poster_cached === true) source = `api/poster.php?i=${encodeURIComponent(movie.id)}`;
-	source ||= remote;
+	const source = movie.poster_local || remote;
 	const fallback = remote && remote !== source ? ` data-fallback="${escapeHtml(remote)}"` : '';
 	const large = full ? sizedPosterUrl(movie.poster, POSTER_FULL_WIDTH) : '';
 	const fullAttribute = large && large !== source ? ` data-full="${escapeHtml(large)}"` : '';
@@ -49,30 +44,24 @@ export function poster(movie, className = 'movie-poster', original = false) {
 	return `<div class="${className} placeholder" aria-hidden="true">C</div>`;
 }
 
-// Download della locandina dal lightbox: api/poster.php la scarica in grande da IMDb (o dà la copia locale)
-// e la consegna con il nome "Locandina <titolo>". Stringa vuota se il film non ha un ID IMDb.
-export function posterDownloadUrl(movie) {
-	if (!/^tt[0-9]{1,20}$/.test(movie?.id || '')) return '';
-	const params = new URLSearchParams({ i: movie.id, download: '1', title: movieName(movie) });
-	const large = sizedPosterUrl(movie.poster, POSTER_FULL_WIDTH);
-	if (/^https:\/\/m\.media-amazon\.com\//.test(large)) params.set('src', large);
-	else if (!movie.poster_local && movie.poster_cached !== true) return '';
-	return `api/poster.php?${params}`;
-}
+// Download della locandina dal lightbox: sul sito passava dal server; nell'app per ora non c'è.
+export const posterDownloadUrl = () => '';
 
 export function posterButton(movie, className, extraClass = '') {
 	const classes = ['movie-poster-trigger', extraClass].filter(Boolean).join(' ');
 	return `<button class="${classes}" data-movie-id="${escapeHtml(movie.id)}" type="button" aria-label="Apri i dettagli di ${escapeHtml(movie.title)}">${poster(movie, className)}</button>`;
 }
 
-// `onVotesChanged` (facoltativo) gira dopo ogni voto salvato: la watchlist si riordina e rifiltra.
-export function createMovieInfo({ app, openImageLightbox, getData = () => ({ movies: [] }), onVotesChanged = () => {} }) {
+// `saveHype` salva il voto dell'Hypometro e ricarica i dati; `onVotesChanged` (facoltativo) gira dopo ogni voto salvato:
+// la watchlist si riordina e rifiltra. `renderMyViewings` disegna "I miei voti" e `openViewing` apre il diario.
+export function createMovieInfo({ app, openImageLightbox, getData = () => ({ movies: [] }), saveHype, renderMyViewings = () => '', openViewing = () => {}, onVotesChanged = () => {} }) {
 	const movieInfoDialog = document.getElementById('movie-info-dialog');
 	const movieInfoClose = document.getElementById('movie-info-close');
 	const movieInfoPoster = document.getElementById('movie-info-poster');
 	const movieInfoTitle = document.getElementById('movie-info-title');
 	const movieInfoVote = document.getElementById('movie-info-vote');
 	const movieInfoDetails = document.getElementById('movie-info-details');
+	const movieInfoViewings = document.getElementById('movie-info-viewings');
 	const movieInfoRegistry = new Map();
 	let movieInfoScrollPosition = null;
 
@@ -94,39 +83,43 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 		`;
 	}
 
-	// Gli elenchi di data.php non portano attori, trama e gli altri dettagli: la scheda li chiede ad api/movie.php
-	// la prima volta che si apre, e li tiene in memoria. I risultati della ricerca OMDb li hanno già.
-	const movieDetailCache = new Map();
-	const hasMovieDetails = movie => 'plot' in movie;
-
 	function showMovieInfo(movieId) {
-		const movie = movieInfoRegistry.get(movieId);
+		// I dati più freschi del titolo (dopo un salvataggio l'oggetto registrato può essere vecchio).
+		const data = getData();
+		const movie = data.movies?.find(item => item.id === movieId)
+			|| data.viewings?.find(viewing => viewing.movieId === movieId)?.movie
+			|| movieInfoRegistry.get(movieId);
 		if (!movie) return;
 		movieInfoPoster.innerHTML = poster(movie, 'movie-info-cover', true);
 		movieInfoTitle.textContent = movieName(movie);
 		renderVote(movieId);
-		const details = hasMovieDetails(movie) ? movie : movieDetailCache.get(movieId);
-		renderMovieInfoDetails(details ? { ...movie, ...details } : movie, !details);
+		renderMovieInfoDetails(movie);
+		renderViewings(movie);
 		movieInfoDialog.dataset.movieId = movieId;
-		movieInfoScrollPosition = { left: window.scrollX, top: window.scrollY };
-		document.body.classList.add('modal-open');
-		movieInfoDialog.showModal();
-		if (!details) loadMovieDetails(movie);
-	}
-
-	async function loadMovieDetails(movie) {
-		try {
-			const result = await apiRequest(`api/movie.php?id=${encodeURIComponent(movie.id)}`);
-			movieDetailCache.set(movie.id, result.movie);
-			if (movieInfoDialog.open && movieInfoDialog.dataset.movieId === movie.id) renderMovieInfoDetails({ ...movie, ...result.movie });
-		} catch (error) {
-			if (movieInfoDialog.open && movieInfoDialog.dataset.movieId === movie.id) renderMovieInfoDetails(movie);
-			showErrorToast(error);
+		if (!movieInfoDialog.open) {
+			movieInfoScrollPosition = { left: window.scrollX, top: window.scrollY };
+			document.body.classList.add('modal-open');
+			movieInfoDialog.showModal();
 		}
 	}
 
-	function renderMovieInfoDetails(movie, loading = false) {
-		movieInfoDetails.setAttribute('aria-busy', String(loading));
+	function renderViewings(movie) {
+		movieInfoViewings.innerHTML = renderMyViewings(movie);
+		movieInfoViewings.hidden = !movieInfoViewings.innerHTML.trim();
+		hydrateIcons(movieInfoViewings);
+	}
+
+	// "Segna come visto" e le visioni di "I miei voti" aprono il diario: la scheda si chiude prima, per non avere
+	// due finestre una sopra l'altra.
+	movieInfoViewings.addEventListener('click', event => {
+		const mark = event.target.closest('.mark-seen');
+		const viewing = event.target.closest('.my-viewing');
+		if (!mark && !viewing) return;
+		movieInfoDialog.close();
+		openViewing(mark ? { movieId: mark.dataset.movieId } : { viewingId: viewing.dataset.viewingId });
+	});
+
+	function renderMovieInfoDetails(movie) {
 		const rows = [
 			['Regista', movie.director],
 			['Attori', movie.actors_full],
@@ -136,6 +129,8 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 			['Riconoscimenti', movie.awards],
 			['Valutazione IMDb', movie.imdb_rating ? `${movie.imdb_rating}/10` : ''],
 			['Incasso', movie.box_office],
+			['Attori principali', movie.actors_full ? '' : movie.stars],
+			['Anno', movie.year],
 			['Tipo', ({ movie: 'Film', series: 'Serie TV', episode: 'Episodio' })[contentType(movie)] || 'Non disponibile']
 		].filter(([, value]) => value);
 		const rowsHtml = rows.map(([label, value]) => `
@@ -144,14 +139,13 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 				<dd>${escapeHtml(value)}</dd>
 			</div>
 		`).join('');
-		if (loading) movieInfoDetails.innerHTML = `${rowsHtml}<p class="movie-info-empty">Caricamento dei dettagli…</p>`;
-		else movieInfoDetails.innerHTML = rows.length ? rowsHtml : '<p class="movie-info-empty">Nessuna informazione aggiuntiva disponibile.</p>';
+		movieInfoDetails.innerHTML = rows.length ? rowsHtml : '<p class="movie-info-empty">Nessuna informazione aggiuntiva disponibile.</p>';
 	}
 
 	// Hypometro: solo per i film ancora in watchlist. Lo slider va da 0 (nessuna voglia, ma è un voto) a 5 e si salva quando
 	// lo si lascia (evento change: rilascio del dito o del mouse, oppure ogni tasto freccia). Emoji in hype.js.
 	const watchlistMovie = movieId => getData().movies.find(movie => movie.id === movieId) || null;
-	// `score` null = l'utente non ha ancora votato (anche 0 è un voto).
+	// `score` null = non ancora votato (anche 0 è un voto).
 	const hypeText = score => (score === null ? 'Non hai ancora votato' : `${score} su ${HYPE_MAX}: ${hypeLevel(score).label}`);
 	// Salvataggi in coda per film: con più voti di fila parte solo l'ultimo non ancora inviato.
 	const voteQueues = new Map();
@@ -179,9 +173,9 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 		const scale = HYPE_LEVELS.map(({ emoji, label }, score) => `<span class="movie-vote-step${score === votes.mine ? ' active' : ''}" data-hype-score="${score}" title="${escapeHtml(label)}">${escapeHtml(emoji)}</span>`).join('');
 		movieInfoVote.innerHTML = `
 			<h3 id="movie-vote-title" class="movie-vote-title">${escapeHtml(HYPE_TITLE)}</h3>
-			<p class="movie-vote-total" aria-live="polite">${voteTotalHtml(votes)}</p>
+			<p class="movie-vote-total" aria-live="polite">${escapeHtml(voteLabel(votes.mine))}</p>
 			<div class="movie-vote-control">
-				<label class="visually-hidden" for="movie-vote-range">Il tuo voto nell’${escapeHtml(HYPE_TITLE)}</label>
+				<label class="visually-hidden" for="movie-vote-range">Quanta voglia hai di vederlo</label>
 				<input id="movie-vote-range" class="movie-vote-range" type="range" min="0" max="${HYPE_MAX}" step="any" value="${votes.mine ?? 0}"
 					aria-valuetext="${escapeHtml(hypeText(votes.mine))}">
 				<div class="movie-vote-scale" aria-hidden="true">${scale}</div>
@@ -189,11 +183,8 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 		`;
 	}
 
-	// Totale con le emoji di hype.js ("12 🍿 · 4 👥"), anche senza voti ("0 🍿 · 0 👥"): i votanti distinguono
-	// un film che nessuno ha votato da uno votato 0. Il testo per gli screen reader resta in parole.
-	function voteTotalHtml(votes) {
-		return `<span aria-hidden="true" title="${escapeHtml(formatVoteTotal(votes))}"><strong>${votes.total}</strong> ${escapeHtml(HYPE_POINTS_EMOJI)} · ${votes.count} ${escapeHtml(HYPE_MEMBERS_EMOJI)}</span><span class="visually-hidden">${escapeHtml(formatVoteTotal(votes))}</span>`;
-	}
+	// Sotto il titolo dell'Hypometro: il livello in parole ("Volentieri"), o l'invito a votare.
+	const voteLabel = score => (score === null ? 'Quanta voglia hai di vederlo?' : hypeLevel(score).label);
 
 	// Come lo Spipometro, il cursore è sempre agganciato a un livello (l'emoji più vicina al punto trascinato),
 	// ma tra un'emoji e l'altra scivola invece di saltare: step="any" permette le posizioni intermedie
@@ -242,11 +233,11 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 		rangeAnimation = requestAnimationFrame(frame);
 	}
 
-	// Aggiorna il riepilogo nel modale, se mostra ancora lo stesso film.
-	function refreshVoteTotal(movieId, movie) {
+	// Aggiorna la scritta sotto il titolo nel modale, se mostra ancora lo stesso titolo.
+	function refreshVoteTotal(movieId, score) {
 		if (!movieInfoDialog.open || movieInfoDialog.dataset.movieId !== movieId) return;
 		const total = movieInfoVote.querySelector('.movie-vote-total');
-		if (total) total.innerHTML = voteTotalHtml(watchlistVotes(movie));
+		if (total) total.textContent = voteLabel(score);
 	}
 
 	async function saveVote(movieId, score) {
@@ -259,13 +250,8 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 			const next = queue.pending;
 			queue.pending = null;
 			try {
-				const result = await apiRequest('api/watchlist-votes.php', { method: 'PUT', body: JSON.stringify({ movieId, score: next }) });
-				// Dopo un ricaricamento dei dati l'oggetto del film può essere cambiato: si aggiorna quello attuale.
-				const movie = watchlistMovie(movieId);
-				if (movie) {
-					movie.votes = result.votes;
-					refreshVoteTotal(movieId, movie);
-				}
+				await saveHype(movieId, next);
+				refreshVoteTotal(movieId, next);
 			} catch (error) {
 				queue.pending = null;
 				showErrorToast(error);

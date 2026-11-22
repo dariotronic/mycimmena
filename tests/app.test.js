@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { APP_VERSION, CREDIT_HANDLE, CREDIT_URL } from '../www/assets/js/app-info.js';
-import { apiRequest, fetchAppData, NOT_YET_AVAILABLE_MESSAGE } from '../www/assets/js/api.js';
 import { contentType, escapeHtml, meetingMovies, movieName } from '../www/assets/js/domain.js';
 import { createViews } from '../www/assets/js/views.js';
 
@@ -71,19 +70,12 @@ test('declares a strict Content Security Policy without inline scripts', () => {
 	assert.doesNotMatch(page, /<script>(?!<\/script>)|<script nonce/);
 });
 
-// Le chiamate apiRequest('api/...') e le locandine di api/poster.php restano fino alla Fase 1, che le sostituisce
-// con store.js e il Filesystem (PIANO.md, §17): qui si controlla che login, push e funzioni social siano spariti.
-test('has no login, push or social features left', () => {
+test('has no server calls, login, push or social features left', () => {
 	for (const file of webFiles()) {
 		const source = read(file);
 		assert.doesNotMatch(source, /hasDeviceAuthorization|device-token|X-Edit-Token|serviceWorker|PushManager|added_by|reaction-picker|data-reply-form|clubdelcimmena-/, `${file} contiene ancora codice del sito`);
-		assert.doesNotMatch(source, /api\/(auth|push|reactions|replies|users|invites|password-links|profile|setup|rollover)\.php/, `${file} chiama ancora un servizio del sito che l'app non avrà`);
+		assert.doesNotMatch(source, /api\/[a-z-]+\.php|apiRequest/, `${file} chiama ancora il server del sito`);
 	}
-});
-
-test('starts with empty data and refuses writes with a clear message until local storage exists', async () => {
-	assert.deepEqual(await fetchAppData(), { upcoming: null, archive: [], movies: [] });
-	await assert.rejects(apiRequest('qualsiasi'), { message: NOT_YET_AVAILABLE_MESSAGE });
 });
 
 test('handles the Android back button: dialog, then menu, then previous view, then background', () => {

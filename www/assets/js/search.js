@@ -1,11 +1,12 @@
-// Ricerca OMDb e coda delle aggiunte alla watchlist. La stessa casella, nell'altra modalità, filtra la watchlist.
-import { contentType, escapeHtml } from './domain.js';
-import { apiRequest } from './api.js';
+// Ricerca su IMDb (imdb.js) e coda delle aggiunte alla watchlist. La stessa casella, nell'altra modalità, filtra la watchlist.
+// La modalità di ricerca si chiama ancora 'omdb' come sul sito: è solo un nome interno.
+import { escapeHtml } from './domain.js';
+import { searchImdb } from './imdb.js';
 import { hydrateIcons, icon, setIcon } from './icons.js';
 import { showErrorToast, showToast } from './toasts.js';
 import { posterButton } from './movie-info.js';
 
-export function createSearch({ getData, render, loadData, getWatchlistType, matchesContentType, updateWatchlistRows, infoButton, titleWithInfo }) {
+export function createSearch({ getData, render, addMovies, getWatchlistType, matchesContentType, updateWatchlistRows, infoButton, titleWithInfo }) {
 	let imdbResults = [];
 	const pendingMovies = new Map();
 	let pendingMovieConflicts = new Set();
@@ -52,7 +53,7 @@ export function createSearch({ getData, render, loadData, getWatchlistType, matc
 		watchlist.hidden = true;
 		results.hidden = false;
 		results.innerHTML = '';
-		status.textContent = 'Ricerca OMDb in corso.';
+		status.textContent = 'Ricerca in corso.';
 		loader.hidden = false;
 		form.setAttribute('aria-busy', 'true');
 		movieSearchTimer = window.setTimeout(() => searchMovies(query, sequence), immediate ? 0 : 1000);
@@ -64,27 +65,13 @@ export function createSearch({ getData, render, loadData, getWatchlistType, matc
 		const loader = document.getElementById('search-loader');
 		const form = document.getElementById('movie-search-form');
 		try {
-			const payload = await apiRequest(`api/search.php?q=${encodeURIComponent(query)}`);
+			const found = await searchImdb(query);
 			if (sequence !== movieSearchSequence) return;
-			imdbResults = (payload.d || []).filter(item => /^tt[0-9]{1,20}$/.test(item.id || '') && item.l).slice(0, 8).map(item => ({
-				id: item.id,
-				type: contentType(item),
-				title: item.l,
-				year: item.y || item.yr || '',
-				poster: item.i?.imageUrl || '',
-				director: item.director || null,
-				actors_full: item.actors_full || null,
-				plot: item.plot || null,
-				runtime: item.runtime || null,
-				genre: item.genre || null,
-				awards: item.awards || null,
-				imdb_rating: item.imdb_rating || null,
-				box_office: item.box_office || null
-			}));
+			imdbResults = found;
 			renderSearchResults();
 		} catch (error) {
 			if (sequence !== movieSearchSequence) return;
-			status.textContent = `Ricerca OMDb non disponibile: ${error.message}`;
+			status.textContent = error.message;
 			results.innerHTML = `
 				<p class="search-empty error">${escapeHtml(status.textContent)}</p>
 			`;
@@ -112,8 +99,8 @@ export function createSearch({ getData, render, loadData, getWatchlistType, matc
 		results.innerHTML = unique.map(movie => {
 			const originalIndex = imdbResults.indexOf(movie);
 			const queued = pendingMovies.has(movie.id);
-			const directorLine = movie.director
-				? `<p class="movie-director">${escapeHtml(movie.director)}</p>`
+			const directorLine = movie.stars
+				? `<p class="movie-director">${escapeHtml(movie.stars)}</p>`
 				: '';
 			const queueLabel = queued ? 'Già in coda' : 'Metti in coda';
 			return `
@@ -236,11 +223,7 @@ export function createSearch({ getData, render, loadData, getWatchlistType, matc
 		const button = document.getElementById('commit-pending-movies');
 		button.disabled = true;
 		try {
-			const addedCount = pendingMovies.size;
-			const result = await apiRequest('api/movies.php', {
-				method: 'POST',
-				body: JSON.stringify({ movies: [...pendingMovies.values()] })
-			});
+			const addedCount = await addMovies([...pendingMovies.values()]);
 			showToast('moviesAdded', { count: addedCount });
 			pendingMovies.clear();
 			pendingMovieConflicts.clear();
@@ -250,25 +233,16 @@ export function createSearch({ getData, render, loadData, getWatchlistType, matc
 			movieSearchMode = 'watchlist';
 			omdbQuery = '';
 			imdbResults = [];
-			await loadData();
 			render();
 			if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 			window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-			if (result.poster_errors?.length) {
-				showErrorToast(`Film aggiunti, ma il download non è riuscito per ${result.poster_errors.length} copertine: verranno usate le immagini originali.`);
-			}
 		} catch (error) {
-			const conflicts = Array.isArray(error.conflicts) ? error.conflicts : [];
-			pendingMovieConflicts = new Set(conflicts.map(movie => movie.id));
-			renderPendingAdditions();
-			const conflictTitles = conflicts.map(movie => movie.title).join(', ');
-			showErrorToast(error.status === 409
-				? `Nel frattempo questi film sono già stati aggiunti: ${conflictTitles}. Rimuovili dalla coda con la × e riprova.`
-				: error);
+			button.disabled = false;
+			showErrorToast(error);
 		}
 	}
 
-	// Svuota ricerca e coda: senza login non servono, e dopo l'uscita non devono restare a chi usa il dispositivo.
+	// Svuota ricerca e coda.
 	function resetSearch() {
 		pendingMovies.clear();
 		pendingMovieConflicts.clear();
@@ -277,7 +251,7 @@ export function createSearch({ getData, render, loadData, getWatchlistType, matc
 		imdbResults = [];
 	}
 
-	// Dopo un cambio di filtro i risultati OMDb già trovati si ridisegnano con il nuovo tipo.
+	// Dopo un cambio di filtro i risultati già trovati si ridisegnano con il nuovo tipo.
 	function refreshResults() {
 		if (movieSearchMode === 'omdb' && imdbResults.length) renderSearchResults();
 	}

@@ -1,4 +1,4 @@
-// Dialog condivisi: conferma delle operazioni e immagine ingrandita (locandine e avatar).
+// Dialog condivisi: conferma delle operazioni e locandina ingrandita.
 import { createLightboxZoom } from './lightbox-zoom.js';
 
 export function createDialogs({ app }) {
@@ -13,7 +13,6 @@ export function createDialogs({ app }) {
 	const posterLightboxLoader = document.getElementById('poster-lightbox-loader');
 	const posterLightboxDownload = document.getElementById('poster-lightbox-download');
 	let actionDialogResolver = null;
-	const reviewsDialog = document.getElementById('reviews-dialog');
 
 	function finishActionDialog(value) {
 		const resolve = actionDialogResolver;
@@ -91,11 +90,6 @@ export function createDialogs({ app }) {
 		posterLightboxLoader.hidden = true;
 		lightboxZoom.reset();
 	});
-	// Avatar nelle recensioni e nel Profilo: si aprono nello stesso modale delle locandine.
-	[app, reviewsDialog].forEach(root => root.addEventListener('click', event => {
-		const img = event.target.closest('.review-avatar-trigger, .profile-avatar-trigger')?.querySelector('img');
-		if (img) openImageLightbox(img);
-	}));
 	posterLightboxClose.addEventListener('click', () => posterLightbox.close());
 	posterLightbox.addEventListener('click', event => {
 		if (event.target === posterLightbox) posterLightbox.close();

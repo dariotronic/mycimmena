@@ -1,7 +1,9 @@
 import { pageHeader } from './components.js';
 import { icon } from './icons.js';
 import { catState, formatSpipe } from './domain.js';
-import { formatVoteTotal, HYPE_POINTS_EMOJI, HYPE_TITLE, watchlistVotes } from './hype.js';
+import { formatHype, HYPE_LEVELS, HYPE_POINTS_EMOJI, HYPE_TITLE, hypeLevel, watchlistVotes } from './hype.js';
+import { sanitizeNotes } from './sanitize.js';
+import { viewingsOf } from './app-data.js';
 import { DEFAULT_DRAW_FILTERS, drawChances, formatChance } from './draw.js';
 import { soundEnabled } from './slot-sounds.js';
 import { APP_VERSION, CREDIT_HANDLE, CREDIT_URL } from './app-info.js';
@@ -12,24 +14,22 @@ export const catCell = state => `<span class="cat-cell ${state}"><svg class="cat
 export const catCells = rating => Array.from({ length: 10 }, (_, index) => catCell(catState(rating, index))).join('');
 
 // Ordinamenti della watchlist: le icone delle linguette (sprite in index.html, disegnate per il Club) si cambiano qui;
-// `label` è il nome letto dagli screen reader e mostrato passando il mouse. Per i voti il secchiello di popcorn
-// richiama i punti dell'Hypometro.
+// `label` è il nome letto dagli screen reader e mostrato passando il mouse. Per l'Hypometro il secchiello di popcorn.
 export const SORT_FIELDS = Object.freeze([
 	{ field: 'added', icon: 'sort_added', label: 'Aggiunto' },
 	{ field: 'title', icon: 'sort_title', label: 'Titolo' },
 	{ field: 'year', icon: 'sort_year', label: 'Anno' },
-	{ field: 'votes', icon: 'sort_votes', label: 'Voti' }
+	{ field: 'votes', icon: 'sort_votes', label: 'Hype' }
 ]);
 
 export function createViews(context) {
 	const {
 		getData,
-		getArchiveQuery = () => '',
+		getDiaryQuery = () => '',
 		getColorMode = () => 'day',
 		getMovieSearchMode,
 		getMovieSort,
 		getOmdbQuery,
-		getReviewState = () => null,
 		getRandomizerState,
 		getSelectedMovieId,
 		getWatchlistCardsPerRow = () => 3,
@@ -59,11 +59,13 @@ export function createViews(context) {
 	function renderHome() {
 		const data = getData();
 		const meeting = data.upcoming && (!data.upcoming.date || data.upcoming.date >= today()) ? data.upcoming : null;
+		if (data.upcoming && !meeting) return renderPastMeeting(data.upcoming);
 		if (!meeting) {
 			return `
 				<section class="home-view">
 					${pageHeader('Home', 'La prossima serata.')}
 					${emptyState('Non c’è ancora una serata in programma.', 'Organizza la prossima serata', '#calendario')}
+					${renderHomeSummary(data)}
 				</section>
 			`;
 		}
@@ -124,6 +126,67 @@ export function createViews(context) {
 		`;
 	}
 
+	// Serata con la data già passata: si chiede com'è andata. "Segna come vista" mette i titoli nel diario
+	// (meeting.js), "Non l'abbiamo fatta" cancella la serata e lascia i titoli in watchlist.
+	function renderPastMeeting(meeting) {
+		const movies = meetingMovies(meeting);
+		return `
+			<section class="home-view" aria-labelledby="past-meeting-title">
+				${pageHeader('Home', 'La prossima serata.')}
+				<div class="past-meeting">
+					<p class="eyebrow">Serata del ${escapeHtml(formatDate(meeting.date))}</p>
+					<h2 id="past-meeting-title" class="display-title">Com’è andata?</h2>
+					<p class="help-text">${movies.length
+						? `Con «Segna come vista» ${movies.length === 1 ? 'il titolo va' : `i ${movies.length} titoli vanno`} nel diario, dove puoi dare ${movies.length === 1 ? 'il voto' : 'i voti'}.`
+						: 'Non c’erano titoli in programma.'}</p>
+					${movies.length ? `<ul class="past-meeting-titles">${movies.map(movie => `<li>${escapeHtml(movieName(movie))}</li>`).join('')}</ul>` : ''}
+					<div class="button-row">
+						${movies.length ? '<button id="complete-meeting" class="button" type="button">Segna come vista</button>' : ''}
+						<button id="clear-meeting" class="button secondary" type="button">Non l’abbiamo fatta</button>
+					</div>
+				</div>
+			</section>
+		`;
+	}
+
+	// Senza serata in programma: ultimi titoli visti e il prossimo candidato dalla watchlist (il più hypato, a parità
+	// il più recente).
+	function renderHomeSummary(data) {
+		const recent = (data.viewings || []).slice(0, 3);
+		const next = [...data.movies].sort((first, second) => watchlistVotes(second).total - watchlistVotes(first).total
+			|| (second.added_at || '').localeCompare(first.added_at || ''))[0];
+		if (!recent.length && !next) return '';
+		return `
+			<div class="home-summary">
+				${next ? `
+					<section class="home-summary-block" aria-labelledby="home-next-title">
+						<h2 id="home-next-title" class="section-title">Da vedere</h2>
+						${summaryRow(next, next.hype !== null ? `<span class="vote-marker" title="${escapeHtml(formatHype(next.hype))}">${escapeHtml(hypeLevel(next.hype).emoji)}</span>` : '')}
+					</section>
+				` : ''}
+				${recent.length ? `
+					<section class="home-summary-block" aria-labelledby="home-recent-title">
+						<h2 id="home-recent-title" class="section-title">Visti di recente</h2>
+						${recent.map(viewing => summaryRow(viewing.movie, `${escapeHtml(formatDate(viewing.date))}${viewing.rating ? ` · ${escapeHtml(formatSpipe(viewing.rating))}` : ''}`)).join('')}
+					</section>
+				` : ''}
+			</div>
+		`;
+	}
+
+	function summaryRow(movie, meta) {
+		return `
+			<article class="archive-film-row home-summary-row">
+				${moviePosterButton(movie, 'archive-film-poster')}
+				<div class="archive-film-copy">
+					<h3 class="archive-film-title">${escapeHtml(movieName(movie))}</h3>
+					<p class="movie-year">${meta}</p>
+				</div>
+				<div class="archive-film-actions">${infoButton(movie)}</div>
+			</article>
+		`;
+	}
+
 	function renderCalendar() {
 		const data = getData();
 		const meeting = data.upcoming || {};
@@ -154,8 +217,8 @@ export function createViews(context) {
 			: '';
 		const archiveButton = data.upcoming
 			? `
-				<button id="archive-meeting" class="button secondary icon-only" type="button" aria-label="Archivia la serata" title="Archivia la serata">
-					${icon('archive')}
+				<button id="archive-meeting" class="button secondary icon-only" type="button" aria-label="Segna la serata come vista" title="Segna la serata come vista">
+					${icon('task_alt')}
 				</button>
 			`
 			: '';
@@ -197,100 +260,156 @@ export function createViews(context) {
 		`;
 	}
 
-	function archiveEntries() {
-		const data = getData();
-		const expiredMeeting = data.upcoming?.date && data.upcoming.date < today() ? [data.upcoming] : [];
-		return [...data.archive, ...expiredMeeting].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-	}
-
-	function renderArchive() {
-		if (!archiveEntries().length) {
-			return `
-				${pageHeader('Archivio', 'Le serate passate.')}
-				${emptyState('L’archivio è ancora vuoto.')}
-				${backToTopButton()}
-			`;
+	// Diario: le visioni dalla più recente, raggruppate per giorno, con ricerca per titolo (PIANO.md, §6).
+	function renderDiary() {
+		const header = pageHeader('Diario', 'Quello che hai visto.');
+		if (!(getData().viewings || []).length) {
+			return `${header}${emptyState('Il diario è vuoto. Segna come visto un titolo dalla watchlist o dalla sua scheda.', 'Vai alla Watchlist', '#lista')}`;
 		}
 		return `
-			${pageHeader('Archivio', 'Le serate passate.')}
+			${header}
 			<section class="archive-search-area">
-				<form id="archive-search-form" class="search-bar" role="search" autocomplete="off">
+				<form id="diary-search-form" class="search-bar" role="search" autocomplete="off">
 					<div class="search-input-wrap">
-						<label class="visually-hidden" for="archive-query">Cerca un film nell’archivio</label>
-						<input id="archive-query" type="search" placeholder="Cerca un film nell’archivio" aria-label="Cerca un film nell’archivio" value="${escapeHtml(getArchiveQuery())}">
+						<label class="visually-hidden" for="diary-query">Cerca un titolo nel diario</label>
+						<input id="diary-query" type="search" placeholder="Cerca un titolo nel diario" aria-label="Cerca un titolo nel diario" value="${escapeHtml(getDiaryQuery())}">
 					</div>
 				</form>
 			</section>
-			<div id="archive-rows" class="list-stack">${renderArchiveRows()}</div>
+			<div id="diary-rows" class="list-stack">${renderDiaryRows()}</div>
 			${backToTopButton()}
 		`;
 	}
 
-	// Mostra le serate in cui almeno un film corrisponde alla ricerca, con tutti i film della serata.
-	function renderArchiveRows() {
-		const query = getArchiveQuery().trim().toLocaleLowerCase('it');
-		const entries = archiveEntries().filter(entry => !query
-			|| meetingMovies(entry).some(movie => String(movie.title || '').toLocaleLowerCase('it').includes(query)));
-		if (!entries.length) return emptyState('Nessuna serata in archivio con questo film.');
-		return entries.map(entry => {
-			const films = meetingMovies(entry);
-			const archived = entry.id !== undefined;
-			const filmRows = films.length
-				? films.map(movie => `
-					<article class="archive-film-row">
-						${moviePosterButton(movie, 'archive-film-poster')}
-						<div class="archive-film-copy">
-							<h4 class="archive-film-title">${escapeHtml(movieName(movie))}</h4>
-							${movieDetails(movie)}
-							${archived ? `
-								${Number(movie.review_count) > 0
-									? `<button class="review-summary review-summary-button" data-review-summary="${escapeHtml(movie.id)}" data-review-action="read" data-movie-id="${escapeHtml(movie.id)}" type="button" aria-label="Leggi le recensioni di ${escapeHtml(movie.title)}">${renderReviewSummary(movie)}</button>`
-									: `<div class="review-summary" data-review-summary="${escapeHtml(movie.id)}">${renderReviewSummary(movie)}</div>`}
-								<section id="review-panel-${escapeHtml(movie.id)}" class="review-panel" data-review-panel="${escapeHtml(movie.id)}" hidden></section>
-							` : ''}
-						</div>
-						${archived ? `<div class="archive-film-actions">${context.infoButton(movie)}${renderReviewActions(movie)}</div>` : ''}
-					</article>
-				`).join('')
-				: '<p class="archive-empty-film">Film non indicato</p>';
-			return `
-				<article class="archive-entry">
-					<h2 class="archive-date">
-						<time datetime="${escapeHtml(entry.date || '')}">${escapeHtml(formatDate(entry.date) || 'Data non indicata')}</time>
-					</h2>
-					<h3 class="archive-place">${escapeHtml(entry.place || 'Luogo non indicato')}</h3>
-					<div class="archive-films">${filmRows}</div>
-				</article>
-			`;
-		}).join('');
+	function renderDiaryRows() {
+		const query = getDiaryQuery().trim().toLocaleLowerCase('it');
+		const viewings = (getData().viewings || []).filter(viewing => !query || String(viewing.movie.title || '').toLocaleLowerCase('it').includes(query));
+		if (!viewings.length) return emptyState('Nessuna visione con questo titolo.');
+		const days = [];
+		viewings.forEach(viewing => {
+			const last = days[days.length - 1];
+			if (last && last.date === viewing.date) last.items.push(viewing);
+			else days.push({ date: viewing.date, items: [viewing] });
+		});
+		return days.map(day => `
+			<article class="archive-entry">
+				<h2 class="archive-date"><time datetime="${escapeHtml(day.date)}">${escapeHtml(formatDate(day.date))}</time></h2>
+				<div class="archive-films">${day.items.map(diaryRow).join('')}</div>
+			</article>
+		`).join('');
 	}
 
-	function renderReviewSummary(movie) {
-		const count = Math.max(0, Number(movie.review_count) || 0);
-		const average = Number(movie.average_rating);
-		if (!count || !Number.isFinite(average)) {
-			return `<span class="review-stars cat-rating" aria-hidden="true">${catCells(0)}</span><span class="review-stars-compact" aria-hidden="true">${catCell('empty')}</span><span class="visually-hidden">Nessuna recensione</span>`;
-		}
-		const rounded = Math.round(average * 2) / 2;
-		// Il gatto singolo sostituisce i dieci quando la card è troppo stretta (container query in style.css).
-		return `<span class="review-stars cat-rating" role="img" aria-label="${rounded.toFixed(1)} su 10">${catCells(rounded)}</span><span class="review-stars-compact" aria-hidden="true">${catCell('full')}</span><span class="review-rating-label">${average.toFixed(1)}</span>`;
-	}
+	const viewingMeta = viewing => [viewing.place, viewing.withWhom ? `con ${viewing.withWhom}` : ''].filter(Boolean).join(' · ');
 
-	// Matita se l'utente ha già recensito il film, altrimenti l'icona di aggiunta.
-	function renderReviewWriteButton(movie) {
-		const expanded = Boolean(getReviewState(movie.id)?.expanded);
-		const labels = movie.my_review
-			? `aria-label="Modifica la tua recensione di ${escapeHtml(movie.title)}" title="Modifica recensione"`
-			: `aria-label="Aggiungi una recensione di ${escapeHtml(movie.title)}" title="Aggiungi recensione"`;
-		return `<button class="icon-button small review-toggle" data-review-action="write" data-movie-id="${escapeHtml(movie.id)}" type="button" ${labels} aria-expanded="${expanded}" aria-controls="review-panel-${escapeHtml(movie.id)}">${icon(movie.my_review ? 'edit' : 'add_comment')}</button>`;
-	}
-
-	function renderReviewActions(movie) {
-		const count = Math.max(0, Number(movie.review_count) || 0);
-		const expanded = Boolean(getReviewState(movie.id)?.expanded);
+	function diaryRow(viewing) {
+		const movie = viewing.movie;
+		const meta = viewingMeta(viewing);
+		const notes = sanitizeNotes(viewing.notes).html;
 		return `
-			${renderReviewWriteButton(movie)}
-			${count ? `<button class="icon-button small review-toggle" data-review-action="read" data-movie-id="${escapeHtml(movie.id)}" type="button" aria-label="Leggi ${count === 1 ? 'la recensione' : `le ${count} recensioni`} di ${escapeHtml(movie.title)}" title="Leggi recensioni" aria-expanded="${expanded}" aria-controls="review-panel-${escapeHtml(movie.id)}">${icon('forum')}</button>` : ''}
+			<article class="archive-film-row diary-row">
+				${moviePosterButton(movie, 'archive-film-poster')}
+				<div class="archive-film-copy">
+					<h3 class="archive-film-title">${escapeHtml(movieName(movie))}</h3>
+					${meta ? `<p class="diary-meta">${escapeHtml(meta)}</p>` : ''}
+					<div class="review-summary">${ratingSummary(viewing.rating)}</div>
+					${notes ? `<div class="review-content diary-notes">${notes}</div>` : ''}
+				</div>
+				<div class="archive-film-actions">
+					${infoButton(movie)}
+					<button class="icon-button small viewing-edit" data-viewing-id="${escapeHtml(viewing.id)}" type="button" aria-label="Modifica la visione di ${escapeHtml(movie.title)} del ${escapeHtml(formatDate(viewing.date))}" title="Modifica">${icon('edit')}</button>
+				</div>
+			</article>
+		`;
+	}
+
+	// Dieci gatti (uno solo quando la card è stretta) e il voto in parole; senza voto, gatti vuoti.
+	function ratingSummary(rating) {
+		if (!rating) {
+			return `<span class="review-stars cat-rating" aria-hidden="true">${catCells(0)}</span><span class="review-stars-compact" aria-hidden="true">${catCell('empty')}</span><span class="review-rating-label">Senza voto</span>`;
+		}
+		return `<span class="review-stars cat-rating" role="img" aria-label="${escapeHtml(formatSpipe(rating))}">${catCells(rating)}</span><span class="review-stars-compact" aria-hidden="true">${catCell('full')}</span><span class="review-rating-label">${escapeHtml(formatSpipe(rating))}</span>`;
+	}
+
+	// "I miei voti" nella scheda del titolo: tutte le visioni, dalla più recente, con la media se sono più di una.
+	function renderMyViewings(movie) {
+		const { list, average, ratedCount } = viewingsOf(getData(), movie.id);
+		const inWatchlist = getData().movies.some(item => item.id === movie.id);
+		const markLabel = list.length ? 'Segna come visto di nuovo' : 'Segna come visto';
+		const markButton = `<button class="button secondary mark-seen" data-movie-id="${escapeHtml(movie.id)}" type="button">${icon('task_alt')}<span>${markLabel}</span></button>`;
+		if (!list.length) return inWatchlist ? `<div class="movie-info-mark">${markButton}</div>` : '';
+		const rounded = average === null ? null : Math.round(average * 2) / 2;
+		const summary = ratedCount > 1
+			? `<p class="my-viewings-average">Media ${escapeHtml(formatSpipe(rounded))} · ${list.length} visioni</p>`
+			: list.length > 1 ? `<p class="my-viewings-average">${list.length} visioni</p>` : '';
+		return `
+			<h3 id="movie-info-viewings-title" class="movie-vote-title">I miei voti</h3>
+			${summary}
+			<ul class="my-viewings">
+				${list.map(viewing => {
+					const meta = viewingMeta(viewing);
+					const notes = sanitizeNotes(viewing.notes).text;
+					return `
+						<li>
+							<button class="my-viewing" type="button" data-viewing-id="${escapeHtml(viewing.id)}" aria-label="Modifica la visione del ${escapeHtml(formatDate(viewing.date))}">
+								<span class="my-viewing-date">${escapeHtml(formatDate(viewing.date))}</span>
+								<span class="review-summary">${ratingSummary(viewing.rating)}</span>
+								${meta ? `<span class="diary-meta">${escapeHtml(meta)}</span>` : ''}
+								${notes ? `<span class="my-viewing-notes">${escapeHtml(notes.length > 140 ? `${notes.slice(0, 140).trim()}…` : notes)}</span>` : ''}
+							</button>
+						</li>
+					`;
+				}).join('')}
+			</ul>
+			<div class="movie-info-mark">${markButton}</div>
+		`;
+	}
+
+	// Modulo della visione (nuova o da modificare) nel dialog del diario. Lo slider dei gatti e l'editor delle note sono
+	// quelli delle recensioni del sito (review-editor.js), con il voto facoltativo.
+	function renderViewingForm({ movie, viewing = null, inWatchlist = false }) {
+		const rating = viewing?.rating ? Number(viewing.rating) : 0;
+		const id = viewing ? escapeHtml(viewing.id) : 'new';
+		return `
+			<form class="review-form viewing-form" data-review-form="${escapeHtml(movie.id)}" data-viewing-form${viewing ? ` data-viewing-id="${id}"` : ''} novalidate>
+				<p class="viewing-form-title">${escapeHtml(movieName(movie))}</p>
+				<div class="form-grid">
+					<div class="field">
+						<label for="viewing-date-${id}">Data</label>
+						<input id="viewing-date-${id}" name="date" type="date" required value="${escapeHtml(viewing?.date || today())}" max="${escapeHtml(today())}">
+					</div>
+					<div class="field">
+						<label for="viewing-place-${id}">Dove <span>(facoltativo)</span></label>
+						<input id="viewing-place-${id}" name="place" type="text" maxlength="120" value="${escapeHtml(viewing?.place || '')}" placeholder="Divano, cinema…">
+					</div>
+					<div class="field full">
+						<label for="viewing-with-${id}">Con chi <span>(facoltativo)</span></label>
+						<input id="viewing-with-${id}" name="withWhom" type="text" maxlength="120" value="${escapeHtml(viewing?.withWhom || '')}">
+					</div>
+				</div>
+				<fieldset class="review-rating">
+					<legend id="viewing-rating-label-${id}">Il tuo voto <span>(facoltativo)</span></legend>
+					<input type="hidden" name="rating" value="${rating || ''}">
+					<div class="rating-slider cat-rating" data-rating-slider role="slider" tabindex="0"
+						aria-labelledby="viewing-rating-label-${id}" aria-valuemin="0.5" aria-valuemax="10"
+						${rating ? `aria-valuenow="${rating}" aria-valuetext="${escapeHtml(formatSpipe(rating))}"` : 'aria-valuetext="Nessun voto"'}>${catCells(rating)}</div>
+					<div class="rating-row">
+						<output class="review-rating-output">${rating ? formatSpipe(rating) : 'Seleziona un punteggio da mezza spipa a dieci spipe'}</output>
+						<button class="text-button viewing-clear-rating" type="button"${rating ? '' : ' hidden'}>Togli il voto</button>
+					</div>
+				</fieldset>
+				${richEditor({ label: 'Note <span>(facoltative)</span>', toolbarLabel: 'Formattazione delle note', textLabel: 'Note sulla visione', content: viewing ? sanitizeNotes(viewing.notes).html : '' })}
+				${!viewing && inWatchlist ? `
+					<label class="viewing-remove-watchlist">
+						<input class="switch" name="removeFromWatchlist" type="checkbox" role="switch" checked>
+						<span>Togli dalla watchlist</span>
+					</label>
+				` : ''}
+				<div class="button-row review-form-actions">
+					<button class="button" type="submit">Salva</button>
+					${viewing ? '<button class="button secondary viewing-delete" type="button">Elimina</button>' : ''}
+					<button class="button secondary viewing-cancel" type="button">Annulla</button>
+				</div>
+			</form>
 		`;
 	}
 
@@ -315,55 +434,6 @@ export function createViews(context) {
 		`;
 	}
 
-	function renderArchiveReviews(movieId, { dialog = false } = {}) {
-		const state = getReviewState(movieId);
-		if (state?.loading) return '<p class="help-text" role="status">Caricamento recensioni…</p>';
-		if (!state) return '<p class="help-text">Caricamento recensioni…</p>';
-		if (state.error) return `<p class="status-message error" role="alert">${escapeHtml(state.error)}</p>`;
-		const reviews = Array.isArray(state.reviews) ? state.reviews : [];
-		const ownReview = state.mine;
-		const reviewRows = !state.editing && reviews.length
-			? reviews.map(review => `
-				<article class="member-review">
-					<div class="review-author">
-						<div class="review-author-lines">
-							<span class="review-author-stars cat-rating" aria-hidden="true">${catCells(review.rating)}</span>
-							<span>${formatSpipe(review.rating)}</span>
-						</div>
-					</div>
-					${review.content ? `<div class="review-content">${review.content}</div>` : '<p class="help-text">Nessun testo aggiunto.</p>'}
-				</article>
-			`).join('')
-			: state.editing ? '' : '<p class="help-text">Non ci sono ancora recensioni per questo film.</p>';
-		const isEditing = Boolean(state.editing);
-		const formVisible = isEditing || (!dialog && !ownReview);
-		const selectedRating = ownReview ? Number(ownReview.rating) : 0;
-		const editorContent = isEditing && ownReview ? ownReview.content : '';
-		return `
-			${isEditing ? '' : `<div class="review-list">${reviewRows}</div>`}
-			${ownReview && !isEditing && !dialog ? `<button class="icon-button small review-edit" data-movie-id="${escapeHtml(movieId)}" type="button" aria-label="Modifica la tua recensione" title="Modifica la tua recensione">${icon('edit')}</button>` : ''}
-			${formVisible ? `
-				<form class="review-form" data-review-form="${escapeHtml(movieId)}" novalidate>
-					<fieldset class="review-rating">
-						<legend id="review-rating-label-${escapeHtml(movieId)}">Il tuo voto</legend>
-						<input type="hidden" name="rating" value="${selectedRating || ''}">
-						<!-- Slider a 20 step (mezzo gatto ciascuno): dito, mouse e tastiera sono gestiti in script.js. -->
-						<div class="rating-slider cat-rating" data-rating-slider role="slider" tabindex="0"
-							aria-labelledby="review-rating-label-${escapeHtml(movieId)}" aria-valuemin="0.5" aria-valuemax="10"
-							${selectedRating ? `aria-valuenow="${selectedRating}" aria-valuetext="${escapeHtml(formatSpipe(selectedRating))}"` : 'aria-valuetext="Nessun voto"'}>${catCells(selectedRating)}</div>
-						<output class="review-rating-output">${selectedRating ? formatSpipe(selectedRating) : 'Seleziona un punteggio da mezza spipa a dieci spipe'}</output>
-					</fieldset>
-					${richEditor({ label: 'La tua recensione <span>(facoltativa)</span>', toolbarLabel: 'Formattazione recensione', textLabel: 'Testo della recensione', content: editorContent })}
-					<div class="button-row review-form-actions">
-						<button class="icon-button small" type="submit" aria-label="${ownReview ? 'Salva modifiche' : 'Pubblica recensione'}" title="${ownReview ? 'Salva modifiche' : 'Pubblica recensione'}" ${ownReview ? 'disabled' : ''}>${icon(ownReview ? 'save' : 'done_all')}</button>
-						${ownReview ? `<button class="icon-button small review-delete" data-movie-id="${escapeHtml(movieId)}" type="button" aria-label="Elimina recensione" title="Elimina recensione">${icon('delete')}</button><button class="icon-button small review-cancel" data-movie-id="${escapeHtml(movieId)}" type="button" aria-label="Annulla modifica" title="Annulla modifica">${icon('close')}</button>` : ''}
-						${!ownReview && dialog ? `<button class="icon-button small review-cancel" data-movie-id="${escapeHtml(movieId)}" type="button" aria-label="Annulla recensione" title="Annulla">${icon('close')}</button>` : ''}
-					</div>
-				</form>
-			` : ''}
-		`;
-	}
-
 	function backToTopButton() {
 		return `
 			<button id="back-to-top" class="icon-button back-to-top" type="button" aria-label="Torna su" title="Torna su" hidden>
@@ -376,7 +446,7 @@ export function createViews(context) {
 	const randomizerState = () => getRandomizerState?.() || {
 		pool: selectableMovies(), weighted: false, filters: DEFAULT_DRAW_FILTERS, excludedCount: 0, oddsOpen: false
 	};
-	const minVotesLabel = minVotes => (minVotes ? `Almeno ${minVotes} ${HYPE_POINTS_EMOJI}` : 'Tutti');
+	const minVotesLabel = minVotes => (minVotes ? `Almeno ${HYPE_LEVELS[minVotes]?.emoji || minVotes}` : 'Tutti');
 	// Il pulsante dei filtri (mobile) risulta premuto se qualche opzione è diversa da quella di partenza.
 	const randomizerFiltered = ({ weighted, filters }) => Boolean(filters.type || filters.minVotes > 0 || !weighted);
 
@@ -412,7 +482,7 @@ export function createViews(context) {
 					<p class="filter-label">Calibrazione</p>
 					<label class="randomizer-weighted">
 						<input id="randomizer-weighted" class="switch" type="checkbox" role="switch" data-randomizer-control${weighted ? ' checked' : ''}>
-						<span>Pesa con l’${escapeHtml(HYPE_TITLE)}<small>Più ${escapeHtml(HYPE_POINTS_EMOJI)} ha un film, più spesso esce</small></span>
+						<span>Pesa con l’${escapeHtml(HYPE_TITLE)}<small>Più voglia hai di vederlo, più spesso esce</small></span>
 					</label>
 				</div>
 			</section>
@@ -441,7 +511,7 @@ export function createViews(context) {
 			return `
 				<li class="randomizer-odds-row" style="--bar: ${((chance / topChance) * 100).toFixed(1)}%">
 					<span class="randomizer-odds-title">${escapeHtml(movieName(movie))}</span>
-					<span class="randomizer-odds-votes" title="${escapeHtml(formatVoteTotal(votes))}">${votes.total} ${escapeHtml(HYPE_POINTS_EMOJI)}</span>
+					<span class="randomizer-odds-votes" title="${escapeHtml(formatHype(votes.mine))}">${votes.mine === null ? '–' : escapeHtml(hypeLevel(votes.mine).emoji)}</span>
 					<span class="randomizer-odds-chance">${formatChance(chance)}</span>
 				</li>
 			`;
@@ -562,7 +632,7 @@ export function createViews(context) {
 
 	function renderMovieList() {
 		const adding = getMovieSearchMode() === 'omdb';
-		const toggleLabel = adding ? 'Torna alla ricerca nella watchlist' : 'Cerca un film da aggiungere su OMDb';
+		const toggleLabel = adding ? 'Torna alla ricerca nella watchlist' : 'Cerca un titolo da aggiungere';
 		return `
 			${pageHeader('Watchlist', 'Quello che vuoi vedere.')}
 			<section class="list-search-area">
@@ -572,8 +642,8 @@ export function createViews(context) {
 						<input id="watchlist-query" type="search" placeholder="Cerca nella watchlist" aria-label="Cerca nella watchlist" value="${escapeHtml(getWatchlistQuery())}">
 					</div>
 						<div id="omdb-search-input" class="search-input-wrap" ${adding ? '' : 'hidden'}>
-							<label class="visually-hidden" for="movie-query">Cerca un film su OMDb</label>
-							<input id="movie-query" type="search" placeholder="Cerca un film su OMDb" aria-label="Cerca un film su OMDb" value="${escapeHtml(getOmdbQuery())}">
+							<label class="visually-hidden" for="movie-query">Cerca un titolo da aggiungere</label>
+							<input id="movie-query" type="search" placeholder="Cerca un film o una serie" aria-label="Cerca un film o una serie da aggiungere" value="${escapeHtml(getOmdbQuery())}">
 						</div>
 						<button id="search-mode-toggle" class="icon-button search-mode-toggle" type="button" aria-label="${toggleLabel}" title="${toggleLabel}" aria-controls="watchlist-search-input omdb-search-input" aria-expanded="${adding}">
 							${icon(adding ? 'close' : 'add')}
@@ -585,7 +655,7 @@ export function createViews(context) {
 				<p id="search-status" class="visually-hidden" role="status" aria-live="polite"></p>
 					<div id="search-loader" class="search-loader" hidden aria-hidden="true">
 						<div class="loader"></div>
-						<p>Ricerca OMDb in corso...</p>
+						<p>Ricerca in corso…</p>
 					</div>
 				<div id="search-results" class="search-results" hidden></div>
 			</section>
@@ -598,13 +668,13 @@ export function createViews(context) {
 		`;
 	}
 
-	// Punteggio dell'Hypometro sulla riga della watchlist, solo nella vista a lista e se qualcuno ha votato: "12 🍿".
-	// Nella vista a card si vede solo nel modale del film.
+	// Hypometro sulla riga della watchlist, solo nella vista a lista e se il titolo è votato: l'emoji del livello.
+	// Nella vista a card si vede solo nella scheda.
 	function voteMarker(movie) {
-		const votes = watchlistVotes(movie);
-		if (!votes.count) return '';
-		const label = `${HYPE_TITLE}: ${formatVoteTotal(votes)}`;
-		return `<span class="vote-marker" title="${escapeHtml(label)}"><span aria-hidden="true">${votes.total} ${escapeHtml(HYPE_POINTS_EMOJI)}</span><span class="visually-hidden">${escapeHtml(label)}</span></span>`;
+		const { mine } = watchlistVotes(movie);
+		if (mine === null) return '';
+		const label = formatHype(mine);
+		return `<span class="vote-marker" title="${escapeHtml(label)}"><span aria-hidden="true">${escapeHtml(hypeLevel(mine).emoji)}</span><span class="visually-hidden">${escapeHtml(label)}</span></span>`;
 	}
 
 	function renderMovieRows() {
@@ -624,7 +694,7 @@ export function createViews(context) {
 				if (firstHasYear !== secondHasYear) return firstHasYear ? -1 : 1;
 				comparison = firstHasYear ? firstYear - secondYear : 0;
 			} else if (sortField === 'votes') {
-				// Più punti prima (in ordine discendente); a parità di punti conta chi ha più votanti.
+				// Più hype prima (in ordine discendente); a parità, i titoli votati prima di quelli senza voto.
 				const firstVotes = watchlistVotes(first);
 				const secondVotes = watchlistVotes(second);
 				comparison = firstVotes.total - secondVotes.total || firstVotes.count - secondVotes.count;
@@ -653,10 +723,13 @@ export function createViews(context) {
 				`}
 				<div class="movie-actions">
 					${infoButton(movie)}
+						<button class="button secondary icon-only mark-seen" data-movie-id="${escapeHtml(movie.id)}" type="button" aria-label="Segna ${escapeHtml(movie.title)} come visto" title="Segna come visto">
+							${icon('task_alt')}
+						</button>
 						<button class="button secondary icon-only remove-movie" data-movie-id="${escapeHtml(movie.id)}" type="button" aria-label="Rimuovi ${escapeHtml(movie.title)} dalla watchlist" title="Rimuovi">
 							${icon('delete')}
 						</button>
-						<button class="button icon-only schedule-movie" data-movie-id="${escapeHtml(movie.id)}" type="button" ${scheduled.has(movie.id) ? 'disabled' : ''} aria-label="Segna ${escapeHtml(movie.title)} come prossimo film" title="Guarda">
+						<button class="button icon-only schedule-movie" data-movie-id="${escapeHtml(movie.id)}" type="button" ${scheduled.has(movie.id) ? 'disabled' : ''} aria-label="Aggiungi ${escapeHtml(movie.title)} alla serata" title="Aggiungi alla serata">
 							${icon('movie')}
 						</button>
 				</div>
@@ -688,5 +761,5 @@ export function createViews(context) {
 		`;
 	}
 
-	return { minVotesLabel, renderArchive, renderArchiveReviews, renderArchiveRows, renderReviewSummary, renderReviewWriteButton, renderCalendar, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
+	return { minVotesLabel, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderCalendar, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
 }

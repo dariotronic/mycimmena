@@ -28,12 +28,14 @@ Da allora le due repo vanno ognuna per conto suo. Quando si corregge qualcosa in
 
 ## Cosa è cambiato
 
-- `api.js` è uno strato provvisorio: dati vuoti all'avvio e un errore chiaro a ogni modifica. Nella Fase 1 lo sostituisce `store.js`; le chiamate `apiRequest('api/...')` rimaste in `meeting.js`, `movie-info.js`, `reviews.js`, `search.js` e `watchlist.js` sono quelle da riscrivere.
+- Niente server: i dati stanno in IndexedDB (`store.js`), `app-data.js` li prepara per le viste, la ricerca chiama IMDb direttamente (`imdb.js`) e le locandine si salvano sul telefono (`posters.js`).
+- Archivio e recensioni sono diventati il **Diario** (`diary.js`): `archive.js` e `reviews.js` non ci sono più; l'editor e lo slider dei gatti (`review-editor.js`) sono gli stessi del sito. Le note passano da `sanitize.js`, al posto del filtro PHP del sito.
+- L'Hypometro è personale: niente totali dei membri.
 - Il "Calendario" si chiama "Serata", il "Profilo" diventa "Impostazioni" (`#impostazioni`; `#profilo` ci porta comunque).
 - Chiavi di `localStorage` da `clubdelcimmena-*` a `mycimmena-*`.
 - Modalità colore "giorno" e "notte" al posto di "colonizzatore" e "colonizzato".
 - Testi del cineforum ("Il prossimo cineforum", "Quando ci vediamo?", "Solo horror e sci-fi, pls.") resi neutri.
-- Nuovi: `boot.js` (tema salvato e controllo della WebView), `app-info.js` (versione e credit), `tests/app.test.js`, `tools/serve.js`.
+- Nuovi: `boot.js` (tema salvato e controllo della WebView), `app-info.js` (versione e credit), `back-button.js`, `store.js`, `app-data.js`, `imdb.js`, `posters.js`, `diary.js`, `sanitize.js`, i test in `tests/` oltre a `frontend.test.js`, `tools/serve.js`.
 
 ## Correzioni riportate
 

@@ -17,8 +17,8 @@ export const TOASTS = {
 	calendarDownloaded: { enabled: true, message: 'Evento scaricato: aprilo per aggiungerlo al calendario' },
 
 	// Serata in programma
-	meetingSaved: { enabled: true, message: ({ past }) => past ? 'Serata aggiunta all’archivio' : 'Serata salvata' },
-	meetingArchived: { enabled: true, message: 'Serata archiviata' },
+	meetingSaved: { enabled: true, message: ({ past }) => past ? 'Serata salvata: la data è passata, in Home trovi «Com’è andata?»' : 'Serata salvata' },
+	meetingCompleted: { enabled: true, message: ({ count }) => count === 1 ? 'Serata nel diario: ora puoi dare il voto' : 'Serata nel diario: ora puoi dare i voti' },
 	meetingCleared: { enabled: true, message: 'Serata rimossa' },
 	movieScheduled: { enabled: true, message: 'Aggiunto alla serata' },
 	movieUnscheduled: { enabled: true, message: 'Rimosso dalla serata' },
@@ -34,9 +34,10 @@ export const TOASTS = {
 	moviesAdded: { enabled: true, message: ({ count }) => count === 1 ? 'Film aggiunto alla watchlist' : `${count} film aggiunti alla watchlist` },
 	movieRemoved: { enabled: true, message: 'Rimosso dalla watchlist' },
 
-	// Recensioni
-	reviewSaved: { enabled: true, message: 'Recensione salvata' },
-	reviewDeleted: { enabled: true, message: 'Recensione eliminata' },
+	// Diario
+	viewingSaved: { enabled: true, message: ({ removed }) => removed ? 'Segnato come visto e tolto dalla watchlist' : 'Segnato come visto' },
+	viewingUpdated: { enabled: true, message: 'Visione aggiornata' },
+	viewingDeleted: { enabled: true, message: 'Visione eliminata' },
 
 	// Impostazioni
 	themeChanged: { enabled: true, message: ({ mode }) => mode === 'night' ? 'Modalità notte' : 'Modalità giorno' }

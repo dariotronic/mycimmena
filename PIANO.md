@@ -45,7 +45,7 @@ L'app si distribuisce come APK fuori dal Play Store. I dati dell'utente restano 
   - `@capacitor/browser`: pagina di registrazione OMDb, link esterni (Instagram, GitHub)
   - `@capacitor/app`: tasto Indietro (già dalla Fase 0), versione dell'app e ritorno in primo piano
   - `@capacitor/clipboard`: rilevamento della chiave copiata
-  - `CapacitorHttp` (incluso nel core): richieste a IMDb, OMDb e GitHub senza problemi di CORS
+  - `CapacitorHttp` (incluso nel core): **non serve** per IMDb, OMDb, le locandine e GitHub, che rispondono con CORS anche all'origine dell'app (`https://localhost`), verificato in Fase 1: basta `fetch`. Resta un'opzione per `feedback.php` se il server non manda le intestazioni CORS
   - Un selettore di file per l'importazione (backup JSON e CSV/ZIP di Letterboxd e IMDb), per esempio `@capawesome/capacitor-file-picker` (da verificare)
   - Un plugin per aprire l'APK con l'installer (per esempio `@capacitor-community/file-opener`, da verificare)
 
@@ -58,7 +58,7 @@ L'app si distribuisce come APK fuori dal Play Store. I dati dell'utente restano 
 ### Dati sul telefono
 - **IndexedDB** nella WebView, attraverso un unico modulo `www/assets/js/store.js`. Le viste non toccano mai IndexedDB direttamente.
 - Al posto di `apiRequest('api/...')` i moduli chiamano funzioni del negozio dati: `store.addToWatchlist(movie)`, `store.saveViewing(...)` e così via. Non si imitano gli indirizzi PHP: essendo una repo separata conviene un'interfaccia pulita.
-- All'avvio si chiede `navigator.storage.persist()`, così il sistema non cancella i dati per liberare spazio.
+- All'avvio si chiede `navigator.storage.persist()`, così il sistema non cancella i dati per liberare spazio. Nella WebView di Android risponde `false` (provato sul telefono), ma lì i dati stanno nella cartella privata dell'app e non vengono sfoltiti come nella cache di un browser: si perdono solo disinstallando o con "Cancella dati".
 - **Attenzione:** IndexedDB, come i file interni dell'app, si cancella con la disinstallazione o con "Cancella dati". Il backup (§8) è l'unica protezione e l'app deve ricordarlo.
 - Lo schema ha un numero di versione e migrazioni in `onupgradeneeded`, come le migrazioni SQL del sito.
 
@@ -73,13 +73,13 @@ L'app si distribuisce come APK fuori dal Play Store. I dati dell'utente restano 
 
 - OMDb si chiama **solo quando serve**: aggiunta di un film o apertura di una scheda senza dettagli. **Non** a ogni risultato di ricerca, come fa oggi `api/search.php` sul sito (che arricchisce fino a 8 risultati per ricerca). I dettagli scaricati restano sul telefono: ogni film costa una richiesta sola.
 - L'endpoint IMDb non è ufficiale: se cambia o non risponde, la ricerca mostra un errore chiaro e l'app resta usabile.
-- Locandine: miniatura `._V1_SX400` salvata nel Filesystem al momento dell'aggiunta, così si vedono anche offline.
+- Locandine: la miniatura `._V1_SX400` si scarica dopo l'aggiunta e si salva in IndexedDB come Blob (store `posters`), così si vede anche offline. Niente plugin Filesystem: funziona uguale anche nel browser. Si mostra con un URL `blob:`; se manca, la versione remota.
 
 ---
 
 ## 3. Modello dati
 
-Store IndexedDB (nomi indicativi):
+Store IndexedDB (schema versione 1, in `www/assets/js/store.js`). `profile`, `settings`, `planned` e `meta` sono record singoli nello store `kv`, per chiave; `posters` tiene le locandine.
 
 - **`profile`** (record unico): `name`, `birthday` (facoltativa), risposte di flavour dell'onboarding (§4), `createdAt`.
 - **`settings`** (record unico):
@@ -95,7 +95,7 @@ Store IndexedDB (nomi indicativi):
 - **`viewings`** (il diario, sostituisce archivio e recensioni):
   - `id`, `movieId`, `date`
   - `place` e `withWhom`, facoltativi
-  - `rating`: 1–20, cioè mezze spipe da ½ a 10, facoltativo
+  - `rating`: da 0,5 a 10 a passi di 0,5 (mezze spipe), come sul sito; facoltativo (`null`)
   - `notes`: HTML filtrato dall'editor delle recensioni
   - Solo per le serie: `episodes` (elenco di `{ s, e }` visti in quella sessione) e `scope` (`'episodes' | 'season' | 'series'`, cioè a cosa si riferisce il voto; §7)
   - `createdAt`, `updatedAt`
@@ -194,7 +194,7 @@ Se l'app viene chiusa a metà, al riavvio riparte dal passaggio raggiunto.
 - Reaction e risposte alle recensioni
 - Notifiche push (VAPID, `sw.js` per le push)
 - "Aggiunto da", filtro per membro, 💫 "hanno recensito tutti", medie tra membri
-- Service worker per l'offline: nell'APK i file sono già locali (da verificare se serve ancora per la cache delle locandine, ma col Filesystem non dovrebbe)
+- Service worker per l'offline: nell'APK i file sono già locali e le locandine stanno in IndexedDB
 
 ### Si aggiungono
 - Onboarding (§4) e modalità di dettaglio (§5)
@@ -454,11 +454,13 @@ Repo remota: `https://github.com/dariotronic/mycimmena`.
 Alla fine della Fase 0 l'app si apre con dati vuoti: ogni modifica risponde "Non ancora disponibile" finché `store.js` non sostituisce lo strato provvisorio `api.js` (vedi ORIGINE.md).
 
 **Fase 1: dati locali**
-- [ ] `store.js` con IndexedDB e le migrazioni
-- [ ] Watchlist, hype, randomizer sul negozio locale
-- [ ] Ricerca IMDb con `CapacitorHttp` (chiamato in modo esplicito, senza l'opzione che sostituisce `fetch` globale: così le richieste ai file dell'app restano quelle normali della WebView), modalità light
-- [ ] Diario ("Segna come visto", voto, note), "I miei voti" nella scheda, serata in programma
-- [ ] Locandine salvate nel Filesystem
+- [x] `store.js` con IndexedDB e le migrazioni
+- [x] Watchlist, hype (personale, da 😶 a 🔥), randomizer sul negozio locale
+- [x] Ricerca IMDb con `fetch` (CORS aperto, niente CapacitorHttp), modalità light
+- [x] Diario ("Segna come visto", voto, note), "I miei voti" nella scheda, serata in programma con "Com'è andata?"
+- [x] Locandine salvate sul telefono (IndexedDB)
+- [x] Home senza serata: "Da vedere" e "Visti di recente"
+- [x] Prova completa sul telefono: ricerca, aggiunta, hype, serata, diario, modifica ed eliminazione
 
 **Fase 2: onboarding, OMDb e serie**
 - [ ] Schermate dell'onboarding (§4) con ripresa dal punto lasciato

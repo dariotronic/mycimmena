@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 import { runInNewContext } from 'node:vm';
-import { apiRequest, fetchAppData, NOT_YET_AVAILABLE_MESSAGE } from '../www/assets/js/api.js';
 import { contentType, escapeHtml, formatSpipe, meetingMovies, movieName, today } from '../www/assets/js/domain.js';
 import { icon, iconMap, setIcon } from '../www/assets/js/icons.js';
 import { TOASTS, toastMessage } from '../www/assets/js/toasts.js';
@@ -11,8 +10,8 @@ import { createViews } from '../www/assets/js/views.js';
 // script.js avvia l'app; questi moduli contengono le funzionalità che un tempo stavano tutte in script.js.
 // I controlli sul codice sorgente li leggono insieme, così non dipendono dal file in cui sta una funzione.
 const APP_MODULES = [
-	'theme', 'navigation', 'dialogs', 'movie-info', 'undo', 'archive', 'meeting', 'randomizer', 'watchlist',
-	'search', 'reviews', 'review-editor', 'lightbox-zoom'
+	'theme', 'navigation', 'dialogs', 'movie-info', 'undo', 'diary', 'meeting', 'randomizer', 'watchlist',
+	'search', 'review-editor', 'lightbox-zoom', 'store', 'posters', 'imdb', 'app-data'
 ];
 const readAppScripts = () => ['../www/script.js', ...APP_MODULES.map(name => `../www/assets/js/${name}.js`)]
 	.map(path => readFileSync(new URL(path, import.meta.url), 'utf8'))
@@ -20,7 +19,7 @@ const readAppScripts = () => ['../www/script.js', ...APP_MODULES.map(name => `..
 
 function makeViews(overrides = {}) {
 	const context = {
-		getData: () => ({ upcoming: null, archive: [], movies: [] }),
+		getData: () => ({ upcoming: null, movies: [], viewings: [] }),
 		getMovieSearchMode: () => 'watchlist',
 		getMovieSort: () => 'title-asc',
 		getOmdbQuery: () => '',
@@ -81,112 +80,6 @@ test('renders the home appointment from injected state', () => {
 	assert.match(views.renderHome(), /Dune \(2021\)/);
 });
 
-test('renders archived-film review summaries and half-star WYSIWYG controls', () => {
-	const movie = { id: 'tt1', title: 'Alien', review_count: 2, average_rating: 8.25 };
-	const views = makeViews({
-		getData: () => ({ upcoming: null, archive: [{ id: 7, date: '2026-10-20', place: 'Cinema', movies: [movie] }], movies: [] }),
-		getReviewState: () => ({ reviews: [], mine: null }),
-		infoButton: () => '<button class="icon-button small movie-info-trigger"></button>',
-		poster: () => '<img>'
-	});
-	const archive = views.renderArchive();
-	assert.match(archive, /review-rating-label">8\.3<\/span>/);
-	assert.doesNotMatch(archive, /review-count-icon|💫/);
-	assert.match(archive, /data-review-action="write"/);
-	assert.match(archive, /data-review-action="read"/);
-	assert.match(archive, /data-icon="add_comment"/);
-	assert.match(archive, /data-icon="forum"/);
-	assert.match(archive, /<button class="review-summary review-summary-button"[^>]*data-review-action="read"[^>]*>[\s\S]*?<\/button>/);
-	assert.match(archive, /class="archive-film-actions">[\s\S]*?movie-info-trigger[\s\S]*?data-review-action="write"[\s\S]*?data-review-action="read"/);
-	const panel = views.renderArchiveReviews('tt1');
-	// Slider unico a 20 step (mezzo gatto) al posto dei radio button, con dieci gatti SVG.
-	assert.match(panel, /class="rating-slider cat-rating" data-rating-slider role="slider" tabindex="0"/);
-	assert.match(panel, /aria-valuemin="0\.5" aria-valuemax="10"/);
-	assert.match(panel, /<input type="hidden" name="rating" value="">/);
-	assert.equal((panel.match(/class="cat-cell empty"/g) || []).length, 10);
-	assert.doesNotMatch(panel, /type="radio"|🐈/);
-	assert.match(panel, /contenteditable="true"/);
-	assert.match(panel, /La tua recensione <span>\(facoltativa\)<\/span>/);
-	for (const command of ['bold', 'italic', 'strikeThrough', 'formatBlock', 'insertUnorderedList', 'insertOrderedList', 'createLink']) {
-		assert.match(panel, new RegExp(`data-review-format="${command}"`));
-	}
-	const ownReviewPanel = makeViews({
-		getReviewState: () => ({
-			reviews: [{
-				rating: 8,
-				content: '<p>La mia recensione pubblicata</p>',
-				user: { username: 'cineuser', name: 'Mario Rossi', avatar_url: null }
-			}],
-			mine: { rating: 8, content: '<p>La mia recensione</p>', user: { username: 'cineuser', name: 'Mario Rossi', avatar_url: null } },
-			editing: true
-		})
-	}).renderArchiveReviews('tt1');
-	assert.doesNotMatch(ownReviewPanel, /La mia recensione pubblicata/);
-	assert.doesNotMatch(ownReviewPanel, /class="review-content"/);
-	assert.match(ownReviewPanel, /aria-label="Annulla modifica"/);
-	assert.match(ownReviewPanel, /aria-label="Elimina recensione"/);
-	assert.match(ownReviewPanel, /aria-label="Salva modifiche"[^>]*disabled/);
-	assert.doesNotMatch(panel, /aria-label="Pubblica recensione"[^>]*disabled/);
-});
-
-test('renders saved reviews without authors or login prompts', () => {
-	const views = makeViews({
-		getReviewState: () => ({
-			reviews: [{ rating: 8.5, content: '<p>Ottimo film</p>' }],
-			mine: { rating: 8.5, content: '<p>Ottimo film</p>' }
-		})
-	});
-	const panel = views.renderArchiveReviews('tt1');
-	assert.match(panel, /<div class="review-content"><p>Ottimo film<\/p><\/div>/);
-	assert.match(panel, /8 spipe e ½ su 10/);
-	assert.doesNotMatch(panel, /review-author-name|review-avatar|Accedi/);
-	assert.match(panel, /class="icon-button small review-edit"/);
-});
-
-test('keeps the review-reading modal read-only when there is no own review', () => {
-	const views = makeViews({
-		getReviewState: () => ({
-			reviews: [{ rating: 8.5, content: '<p>Ottimo film</p>' }],
-			mine: null
-		})
-	});
-	const dialog = views.renderArchiveReviews('tt1', { dialog: true });
-	assert.match(dialog, /Ottimo film/);
-	assert.doesNotMatch(dialog, /data-review-form/);
-	assert.doesNotMatch(dialog, /class="review-edit"/);
-	const inlinePanel = views.renderArchiveReviews('tt1');
-	assert.match(inlinePanel, /data-review-form/);
-});
-
-test('does not show the edit icon in the review-reading modal', () => {
-	const views = makeViews({
-		getReviewState: () => ({
-			reviews: [{ rating: 8, content: '<p>La mia recensione</p>' }],
-			mine: { rating: 8, content: '<p>La mia recensione</p>' }
-		})
-	});
-	assert.doesNotMatch(views.renderArchiveReviews('tt1', { dialog: true }), /class="icon-button small review-edit"/);
-	assert.match(views.renderArchiveReviews('tt1'), /class="icon-button small review-edit"/);
-});
-
-test('provides a dedicated modal for reading reviews', () => {
-	const index = readFileSync(new URL('../www/index.html', import.meta.url), 'utf8');
-	assert.match(index, /<dialog id="reviews-dialog"/);
-	assert.match(index, /id="reviews-dialog-body"/);
-	const script = readAppScripts();
-	assert.match(script, /if \(action === 'read'\) \{\s*openReviewsDialog\(movieId\)/);
-	assert.match(script, /renderArchiveReviews\(movieId, \{ dialog: true \}\)/);
-	assert.match(script, /openReviewsDialog\(movieId, true\)/);
-	assert.match(script, /reviewCache\.delete\(movieId\);\s*closeReviewEditor\(movieId\)/);
-	// Annullare la modifica chiude subito l'editor; la conferma resta solo per l'eliminazione.
-	assert.doesNotMatch(script, /Scartare le modifiche non salvate/);
-	assert.match(script, /if \(state\) \{\s*state\.editing = false;\s*if \(reviewsDialog\.contains\(cancel\)\) \{\s*reviewsDialog\.close\(\);/);
-	assert.match(script, /askConfirmation\('Sei sicuro di voler eliminare la tua recensione\?'\)/);
-	assert.doesNotMatch(script, /repliesNote|risposte che ha ricevuto/);
-	assert.match(script, /submit\.disabled = rating === form\.dataset\.originalReviewRating\s*&& editor\.innerHTML === form\.dataset\.originalReviewContent/);
-	assert.match(script, /initializeReviewForm\(form\)/);
-});
-
 test('confirmation dialog references only existing markup', () => {
 	const index = readFileSync(new URL('../www/index.html', import.meta.url), 'utf8');
 	const script = readAppScripts();
@@ -194,19 +87,6 @@ test('confirmation dialog references only existing markup', () => {
 		assert.match(index, new RegExp(`id="${id}"`));
 	}
 	assert.doesNotMatch(script, /actionDialogError/);
-});
-
-test('shows only empty cats and the write icon when an archived film has no reviews', () => {
-	const archive = makeViews({
-		getData: () => ({ upcoming: null, archive: [{ id: 8, date: '2026-10-20', movies: [{ id: 'tt9', title: 'Moon' }] }], movies: [] }),
-		poster: () => '<img>'
-	}).renderArchive();
-	// Nessun "0": solo gatti vuoti, con un testo per gli screen reader.
-	assert.doesNotMatch(archive, /review-rating-label/);
-	assert.equal((archive.match(/class="cat-cell empty"/g) || []).length, 11);
-	assert.match(archive, /<span class="visually-hidden">Nessuna recensione<\/span>/);
-	assert.match(archive, /data-review-action="write"[^>]*>[\s\S]*?data-icon="add_comment"/);
-	assert.doesNotMatch(archive, /data-review-action="read"/);
 });
 
 test('draws films weighted by the Hypometro, with filters and exclusions', async () => {
@@ -336,7 +216,7 @@ test('uses the same page header component across every view', () => {
 	const renderers = [
 		views.renderHome,
 		views.renderCalendar,
-		views.renderArchive,
+		views.renderDiary,
 		views.renderComingFilms,
 		views.renderMovieList,
 		views.renderSettings
@@ -367,7 +247,7 @@ test('keeps the settings route in touch navigation, with the evening always visi
 	assert.ok(touchNav);
 	const items = [...touchNav.matchAll(/data-route="([^"]+)"|class="touch-nav-home"|data-theme-toggle/g)]
 		.map(([, route]) => route || 'home');
-	assert.deepEqual(items, ['calendario', 'prossimi', 'archivio', 'lista', 'impostazioni', 'home']);
+	assert.deepEqual(items, ['calendario', 'prossimi', 'diario', 'lista', 'impostazioni', 'home']);
 	assert.doesNotMatch(touchNav, / hidden>/);
 	const styles = readFileSync(new URL('../www/style.css', import.meta.url), 'utf8');
 	assert.match(styles, /\.touch-nav \{[^}]*grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
@@ -402,10 +282,11 @@ test('matches watchlist secondary icon hover for review and info controls withou
 	assert.match(styles, /\.review-toggle:hover:not\(:disabled\), \.movie-info-trigger:hover:not\(:disabled\) \{ background: var\(--clay-wash-subtle\); border-color: transparent; color: var\(--rust\); transform: none; box-shadow: none; \}/);
 });
 
-test('adds the back-to-top button to the watchlist and archive only', () => {
-	const views = makeViews();
+test('adds the back-to-top button to the watchlist and diary only', () => {
+	const movie = { id: 'tt1', title: 'Alien' };
+	const views = makeViews({ getData: () => ({ upcoming: null, movies: [], viewings: [{ id: 'v1', movieId: 'tt1', date: '2026-10-20', rating: null, movie }] }) });
 	assert.match(views.renderMovieList(), /id="back-to-top".*aria-label="Torna su"/);
-	assert.match(views.renderArchive(), /id="back-to-top".*aria-label="Torna su"/);
+	assert.match(views.renderDiary(), /id="back-to-top".*aria-label="Torna su"/);
 	assert.doesNotMatch(views.renderHome(), /id="back-to-top"/);
 });
 
@@ -464,16 +345,15 @@ test('renders cards with only the poster and evenly spaced action controls', () 
 	assert.match(html, /schedule-movie/);
 });
 
-test('makes posters open movie details in home, calendar, archive, randomizer, and list views', () => {
+test('makes posters open movie details in home, calendar, diary, randomizer, and list views', () => {
 	const movie = { id: 'tt1', title: 'Alien', year: 1979 };
 	const views = makeViews({
-		getData: () => ({ upcoming: { date: '2026-10-30', place: 'Cinema', movies: [movie] }, archive: [{ date: '2026-10-20', place: 'Cinema', movies: [movie] }], movies: [movie] }),
+		getData: () => ({ upcoming: { date: '2026-10-30', place: 'Cinema', movies: [movie] }, viewings: [{ id: 'v1', movieId: 'tt1', date: '2026-10-20', rating: 8, movie }], movies: [movie] }),
 		getSelectedMovieId: () => movie.id,
-		isAuthorized: () => true,
 		selectableMovies: () => [movie],
 		poster: (_movie, className = 'movie-poster') => `<img class="${className}">`
 	});
-	for (const html of [views.renderHome(), views.renderCalendar(), views.renderArchive(), views.renderComingFilms(), views.renderMovieRows()]) {
+	for (const html of [views.renderHome(), views.renderCalendar(), views.renderDiary(), views.renderComingFilms(), views.renderMovieRows()]) {
 		assert.match(html, /class="movie-poster-trigger[^\"]*" data-movie-id="tt1" type="button" aria-label="Apri i dettagli di Alien"/);
 	}
 	const script = readAppScripts();
@@ -512,18 +392,6 @@ test('stacks archive film info and review actions in a right-side column', () =>
 	assert.match(styles, /\.archive-film-actions \{ display: flex; flex-direction: column; align-self: stretch; align-items: center; justify-content: space-evenly;/);
 	assert.match(styles, /\.archive-film-actions \.icon-button\.small \.material-icons-outlined \{[^}]*transform: translateX\(-1px\);/);
 	assert.match(styles, /\.archive-film-row \{ grid-template-columns: 58px minmax\(0, 1fr\) 30px; gap: 13px; \}/);
-});
-
-test('makes the review average open the review dialog when reviews exist', () => {
-	const script = readAppScripts();
-	const views = makeViews({
-		getData: () => ({ upcoming: null, archive: [{ id: 7, date: '2026-10-20', place: 'Cinema', movies: [{ id: 'tt1', title: 'Alien', review_count: 2, average_rating: 8.5 }] }], movies: [] }),
-		poster: () => '<img>',
-		infoButton: () => '<button class="movie-info-trigger"></button>'
-	}).renderArchive();
-	assert.match(views, /class="review-summary review-summary-button"[^>]*data-review-action="read"[^>]*data-movie-id="tt1"/);
-	assert.match(script, /event\.target\.closest\('\.review-toggle, \.review-summary-button'\)/);
-	assert.match(script, /if \(action === 'read'\) \{\s*openReviewsDialog\(movieId\)/);
 });
 
 test('uses compact row-card padding, preserves archive spacing and removes empty queue space', () => {
@@ -706,50 +574,6 @@ test('writes review ratings as spipe, singular up to one cat', () => {
 	assert.equal(formatSpipe(10), '10 spipe su 10');
 });
 
-test('filters archive evenings by film title and keeps every film of a matching evening', () => {
-	let query = '';
-	const views = makeViews({
-		getArchiveQuery: () => query,
-		getData: () => ({ upcoming: null, movies: [], archive: [
-			{ id: 1, date: '2026-10-26', place: 'Casa', movies: [{ id: 'tt1', title: 'The Babadook' }, { id: 'tt2', title: 'The Lighthouse' }] },
-			{ id: 2, date: '2026-10-14', place: 'Cinema', movies: [{ id: 'tt3', title: 'Other Mommy' }] }
-		] }),
-		poster: () => '<img>'
-	});
-	assert.match(views.renderArchive(), /id="archive-query"/);
-	assert.equal((views.renderArchiveRows().match(/class="archive-entry"/g) || []).length, 2);
-	query = '  BABAD ';
-	const filtered = views.renderArchiveRows();
-	assert.equal((filtered.match(/class="archive-entry"/g) || []).length, 1);
-	assert.match(filtered, /The Lighthouse/);
-	assert.doesNotMatch(filtered, /Other Mommy/);
-	query = 'nessun film';
-	assert.match(views.renderArchiveRows(), /Nessuna serata in archivio con questo film\./);
-});
-
-test('shows the pencil on archived films the member already reviewed and the add icon otherwise', () => {
-	const views = makeViews({
-		getData: () => ({ upcoming: null, movies: [], archive: [{ id: 1, date: '2026-10-26', movies: [
-			{ id: 'tt1', title: 'Reviewed', review_count: 1, average_rating: 7, my_review: true },
-			{ id: 'tt2', title: 'Fresh', review_count: 0, average_rating: null, my_review: false }
-		] }] }),
-		getReviewState: () => null,
-		isAuthorized: () => true,
-		infoButton: () => '',
-		poster: () => '<img>'
-	});
-	const archive = views.renderArchive();
-	assert.match(archive, /data-review-action="write" data-movie-id="tt1"[^>]*title="Modifica recensione"[^>]*>[\s\S]*?data-icon="edit"/);
-	assert.match(archive, /data-review-action="write" data-movie-id="tt2"[^>]*title="Aggiungi recensione"[^>]*>[\s\S]*?data-icon="add_comment"/);
-	assert.match(views.renderReviewWriteButton({ id: 'tt2', title: 'Fresh', my_review: true }), /data-icon="edit"/);
-});
-
-test('re-renders archive rows when a film gets its first review or loses its last one', () => {
-	const script = readAppScripts();
-	assert.match(script, /const hadReviews = Number\(movie\.review_count\) > 0;/);
-	assert.match(script, /if \(hadReviews !== movie\.review_count > 0\) \{\s*updateArchiveRows\(\);\s*return;\s*\}/);
-});
-
 test('configures every toast in one file and uses only configured keys', () => {
 	const script = readAppScripts();
 	// Chiavi passate a showToast o, per le rimozioni annullabili, a runUndoable({ toastKey }).
@@ -764,12 +588,13 @@ test('configures every toast in one file and uses only configured keys', () => {
 	}
 	assert.equal(toastMessage('moviesAdded', { count: 1 }), 'Film aggiunto alla watchlist');
 	assert.equal(toastMessage('moviesAdded', { count: 3 }), '3 film aggiunti alla watchlist');
-	assert.equal(toastMessage('meetingSaved', { past: true }), 'Serata aggiunta all’archivio');
+	assert.equal(toastMessage('meetingSaved', { past: true }), 'Serata salvata: la data è passata, in Home trovi «Com’è andata?»');
 	assert.equal(toastMessage('themeChanged', { mode: 'night' }), 'Modalità notte');
 	assert.equal(toastMessage('sconosciuto'), '');
-	TOASTS.reviewSaved.enabled = false;
-	assert.equal(toastMessage('reviewSaved'), '');
-	TOASTS.reviewSaved.enabled = true;
+	assert.equal(toastMessage('viewingSaved', { removed: true }), 'Segnato come visto e tolto dalla watchlist');
+	TOASTS.viewingDeleted.enabled = false;
+	assert.equal(toastMessage('viewingDeleted'), '');
+	TOASTS.viewingDeleted.enabled = true;
 });
 
 test('reports action outcomes only through toasts, without inline status messages or alerts', () => {
@@ -805,18 +630,18 @@ test('lists the "Aggiunto" sort tab first', () => {
 	assert.deepEqual([...html.matchAll(/class="sort-tab[^"]*" data-field="([a-z]+)"/g)].map(match => match[1]), ['added', 'title', 'year', 'votes']);
 });
 
-test('sorts the watchlist by votes, filters by minimum score and shows the score on each row', () => {
-	const movie = (id, title, total, count) => ({ id, title, year: '2000', votes: { total, count, mine: 0 } });
-	const data = { upcoming: null, archive: [], movies: [movie('tt1', 'Alfa', 3, 1), movie('tt2', 'Beta', 12, 4), movie('tt3', 'Gamma', 0, 0), movie('tt4', 'Delta', 3, 2)] };
+test('sorts the watchlist by personal hype, filters by a minimum level and shows the level emoji on each row', () => {
+	const movie = (id, title, hype) => ({ id, title, year: '2000', hype, votes: { total: hype ?? 0, count: hype === null ? 0 : 1, mine: hype } });
+	const data = { upcoming: null, movies: [movie('tt1', 'Alfa', 3), movie('tt2', 'Beta', 5), movie('tt3', 'Gamma', null), movie('tt4', 'Delta', 0)], viewings: [] };
 	const order = html => [...html.matchAll(/<h2 class="movie-title">([^<]+)<\/h2>/g)].map(match => match[1]);
 	const sorted = makeViews({ getData: () => data, getMovieSort: () => 'votes-desc' }).renderMovieRows();
-	// A parità di punti vince chi ha più votanti.
-	assert.deepEqual(order(sorted), ['Beta', 'Delta', 'Alfa', 'Gamma']);
-	assert.match(sorted, /<span aria-hidden="true">12 🍿<\/span><span class="visually-hidden">Hypometro: 12 punti da 4 membri<\/span>/);
+	// A pari livello (0) il titolo votato viene prima di quello non votato.
+	assert.deepEqual(order(sorted), ['Beta', 'Alfa', 'Delta', 'Gamma']);
+	assert.match(sorted, /<span aria-hidden="true">🔥<\/span><span class="visually-hidden">Hypometro: Non vedo l’ora \(5 su 5\)<\/span>/);
+	assert.doesNotMatch(sorted, /🍿|membri/);
 	const filtered = makeViews({ getData: () => data, getMovieSort: () => 'votes-desc', getWatchlistMinVotes: () => 3 }).renderMovieRows();
-	assert.deepEqual(order(filtered), ['Beta', 'Delta', 'Alfa']);
-	const none = makeViews({ getData: () => data, getMovieSort: () => 'votes-desc', getWatchlistMinVotes: () => 20 }).renderMovieRows();
-	assert.match(none, /Nessun titolo corrisponde alla ricerca o ai filtri\./);
+	assert.deepEqual(order(filtered), ['Beta', 'Alfa']);
+	assert.equal(makeViews().minVotesLabel(3), 'Almeno 😃');
 });
 
 test('keeps the Hypometro emoji in hype.js, one per level from 0 to 5', async () => {
@@ -824,7 +649,9 @@ test('keeps the Hypometro emoji in hype.js, one per level from 0 to 5', async ()
 	assert.equal(hype.HYPE_LEVELS.length, 6);
 	assert.equal(hype.HYPE_MAX, 5);
 	assert.ok(hype.HYPE_LEVELS.every(level => level.emoji && level.label));
-	assert.equal(hype.formatVoteTotal({ total: 1, count: 1 }), '1 punto da 1 membro');
+	assert.equal(hype.formatHype(3), 'Hypometro: Volentieri (3 su 5)');
+	assert.equal(hype.formatHype(null), 'Non ancora votato');
+	assert.equal('HYPE_MEMBERS_EMOJI' in hype, false);
 	assert.deepEqual(hype.watchlistVotes({}), { total: 0, count: 0, mine: null });
 	// Anche 0 è un voto: si distingue dal non aver votato.
 	assert.deepEqual(hype.watchlistVotes({ votes: { total: 0, count: 2, mine: 0 } }), { total: 0, count: 2, mine: 0 });
@@ -837,10 +664,11 @@ test('saves the watchlist vote from the film modal slider', () => {
 	assert.match(movieInfo, /type="range" min="0" max="\$\{HYPE_MAX\}" step="any"/);
 	// Si salva al rilascio (change), non a ogni movimento (input).
 	assert.match(movieInfo, /addEventListener\('change', event => \{\s*if \(event\.target\.id === 'movie-vote-range'[^)]*\) saveVote\(/);
-	// Senza voti si vedono comunque le emoji dei punti e dei votanti, con 0 e 0.
-	assert.doesNotMatch(movieInfo, /Ancora nessun voto/);
-	assert.match(movieInfo, /\$\{escapeHtml\(HYPE_POINTS_EMOJI\)\} · \$\{votes\.count\} \$\{escapeHtml\(HYPE_MEMBERS_EMOJI\)\}/);
-	assert.match(movieInfo, /apiRequest\('api\/watchlist-votes\.php', \{ method: 'PUT', body: JSON\.stringify\(\{ movieId, score: next \}\) \}\)/);
+	// Hypometro personale: sotto il titolo il livello in parole, niente totali dei membri; si salva con store.js.
+	assert.doesNotMatch(movieInfo, /HYPE_MEMBERS_EMOJI|votes\.count/);
+	assert.match(movieInfo, /Quanta voglia hai di vederlo\?/);
+	assert.match(movieInfo, /await saveHype\(movieId, next\);/);
+	assert.match(read('../www/script.js'), /saveHype: async \(movieId, score\) => \{\s*await store\.setHype\(movieId, score\);/);
 });
 
 test('styles the shared evening image with the active theme palette', () => {
@@ -864,10 +692,11 @@ test('draws the shared image icons from the inline sprite, not from the removed 
 	}
 });
 
-test('keeps the archive rating inside narrow cards by wrapping and switching to a single cat', () => {
-	const summary = movie => makeViews({ getData: () => ({ upcoming: null, archive: [], movies: [] }) }).renderReviewSummary(movie);
-	assert.match(summary({ id: 'tt1', review_count: 2, average_rating: 7 }), /class="review-stars-compact" aria-hidden="true"><span class="cat-cell full">/);
-	assert.match(summary({ id: 'tt1', review_count: 0 }), /class="review-stars-compact" aria-hidden="true"><span class="cat-cell empty">/);
+test('keeps the diary rating inside narrow cards by wrapping and switching to a single cat', () => {
+	const movie = { id: 'tt1', title: 'Alien' };
+	const diary = rating => makeViews({ getData: () => ({ upcoming: null, movies: [], viewings: [{ id: 'v1', movieId: 'tt1', date: '2026-10-20', rating, movie }] }) }).renderDiaryRows();
+	assert.match(diary(7), /class="review-stars-compact" aria-hidden="true"><span class="cat-cell full">/);
+	assert.match(diary(null), /class="review-stars-compact" aria-hidden="true"><span class="cat-cell empty">/);
 	const styles = readFileSync(new URL('../www/style.css', import.meta.url), 'utf8');
 	assert.match(styles, /\.review-summary \{ display: flex; flex-wrap: wrap;/);
 	assert.match(styles, /\.archive-film-copy \{ container: film-copy \/ inline-size; \}/);
@@ -887,7 +716,7 @@ test('draws rating cats with the bundled SVG instead of platform emoji', async (
 	assert.match(index, /<symbol id="cat-empty" viewBox="0 0 32 32">/);
 	const views = readFileSync(new URL('../www/assets/js/views.js', import.meta.url), 'utf8');
 	assert.doesNotMatch(views, /🐈/);
-	const summary = makeViews({ getData: () => ({ upcoming: null, archive: [], movies: [] }) }).renderReviewSummary({ id: 'tt1', review_count: 3, average_rating: 7.4 });
+	const summary = makeViews({ getData: () => ({ upcoming: null, movies: [], viewings: [{ id: 'v1', movieId: 'tt1', date: '2026-10-20', rating: 7.5, movie: { id: 'tt1', title: 'Alien' } }] }) }).renderDiaryRows();
 	assert.equal((summary.match(/class="cat-cell full"/g) || []).length, 8);
 	assert.equal((summary.match(/class="cat-cell half"/g) || []).length, 1);
 	assert.match(summary, /<use href="#cat-full"\/>/);

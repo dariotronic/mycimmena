@@ -39,6 +39,7 @@ const iconMap = Object.freeze({
 	send: 'send',
 	strikethrough_s: 'strikethrough_s',
 	share: 'share',
+	task_alt: 'task_alt',
 	sort_added: 'sort_added',
 	sort_title: 'sort_title',
 	sort_votes: 'sort_votes',
