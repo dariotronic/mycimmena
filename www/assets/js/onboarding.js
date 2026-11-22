@@ -7,6 +7,7 @@ import { showErrorToast } from './toasts.js';
 import { bindKeySetup, renderKeySetup } from './key-setup.js';
 import { bindMoviePicker } from './movie-picker.js';
 import { COMPANY, LANGUAGES, PLACES, POPCORN, SPECTATORS } from './profile.js';
+import { importHowTo } from './import-ui.js';
 
 export const STEPS = ['welcome', 'who', 'chat', 'cards', 'confirm', 'key', 'backup', 'import', 'end'];
 
@@ -39,7 +40,8 @@ const PLANS = {
 	}
 };
 
-export function createOnboarding({ store, details, getData, refresh, onFinish }) {
+// openBackup: ripristino di un backup dal benvenuto (telefono nuovo); openImport: importazione della watchlist.
+export function createOnboarding({ store, details, getData, refresh, onFinish, openBackup = () => {}, openImport = () => {} }) {
 	const root = document.getElementById('onboarding');
 	let unbindKey = () => {};
 
@@ -113,7 +115,7 @@ export function createOnboarding({ store, details, getData, refresh, onFinish })
 			<img class="onboarding-logo" src="assets/logo.svg" alt="" width="120" height="120">
 			<h1 tabindex="-1">Benvenuto in myCimmena</h1>
 			<p class="onboarding-lead">Tieni traccia dei film e delle serie che vuoi vedere e di quelli che hai visto, con i tuoi voti. Tutto resta sul tuo telefono.</p>
-		`, { showBack: false, nextLabel: 'Iniziamo' }),
+		`, { showBack: false, nextLabel: 'Iniziamo', extra: '<button class="text-button" type="button" data-ob-restore>Ho un backup: ripristinalo</button>' }),
 		who: () => frame(`
 			<h1 tabindex="-1">Chi sei?</h1>
 			<form class="form-grid onboarding-form" data-ob-form>
@@ -171,31 +173,13 @@ export function createOnboarding({ store, details, getData, refresh, onFinish })
 			<h1 tabindex="-1">I tuoi dati stanno qui</h1>
 			<p class="onboarding-lead">Watchlist, diario e voti vivono solo su questo telefono: niente account, niente server.</p>
 			<p>Per questo, se disinstalli l'app o ne cancelli i dati, si perdono. Con <strong>Esporta backup</strong> nelle Impostazioni salvi tutto in un file da tenere su Drive, in una mail o dove preferisci: serve anche per cambiare telefono.</p>
-			<p class="help-text">L'esportazione arriva con il prossimo aggiornamento dell'app.</p>
 		`),
 		import: () => frame(`
 			<h1 tabindex="-1">Hai già una watchlist altrove?</h1>
 			<p class="onboarding-lead">Puoi portare in myCimmena i film da vedere salvati su Letterboxd o IMDb. Ecco come scaricare il file:</p>
-			<div class="onboarding-import">
-				<section>
-					<h2>Letterboxd</h2>
-					<ol>
-						<li>Apri letterboxd.com dal browser (nell'app di Letterboxd l'esportazione non c'è).</li>
-						<li>Impostazioni → scheda <strong>Data</strong> → <strong>Export your data</strong>.</li>
-						<li>Si scarica un file <code>.zip</code>: myCimmena lo legge così com'è.</li>
-					</ol>
-				</section>
-				<section>
-					<h2>IMDb</h2>
-					<ol>
-						<li>Apri imdb.com e la tua <strong>Watchlist</strong>.</li>
-						<li>Menu <strong>⋯</strong> → <strong>Export</strong>.</li>
-						<li>Dalla pagina <strong>Your exports</strong> scarica il file <code>.csv</code> quando è pronto.</li>
-					</ol>
-				</section>
-			</div>
-			<p class="help-text">L'importazione arriva con il prossimo aggiornamento: la troverai in Impostazioni → Importa watchlist.</p>
-		`, { nextLabel: 'Più tardi' }),
+			${importHowTo()}
+			<p class="help-text">Lo trovi sempre in Impostazioni → Importa watchlist.</p>
+		`, { nextLabel: 'Ho il file, importa', nextAttrs: 'data-ob-import', extra: '<button class="text-button" type="button" data-ob-next>Più tardi</button>' }),
 		end: () => frame(`
 			<img class="onboarding-logo" src="assets/logo.svg" alt="" width="120" height="120">
 			<h1 tabindex="-1">Ciao${profile().name ? `, ${escapeHtml(profile().name)}` : ''}!</h1>
@@ -253,6 +237,8 @@ export function createOnboarding({ store, details, getData, refresh, onFinish })
 			const plan = event.target.closest('[data-ob-plan]');
 			if (plan) return void await goTo('cards', { choice: plan.dataset.obPlan });
 			if (event.target.closest('[data-ob-skip]')) return void await next();
+			if (event.target.closest('[data-ob-restore]')) return void openBackup();
+			if (event.target.closest('[data-ob-import]')) return void openImport({ afterImport: () => next() });
 			if (event.target.closest('[data-ob-confirm]')) {
 				const full = choice() === 'full';
 				const settings = getData().settings || {};

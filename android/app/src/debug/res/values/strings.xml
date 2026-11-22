@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Nome della versione di sviluppo (applicationId it.mycimmena.app.debug): convive con quella installata dalle Release. -->
+<resources>
+    <string name="app_name">myCimmena dev</string>
+    <string name="title_activity_main">myCimmena dev</string>
+</resources>

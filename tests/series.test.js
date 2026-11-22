@@ -149,7 +149,9 @@ test('saves profile, settings, onboarding, OMDb details and the season structure
 	await store.addToWatchlist([severance]);
 	await store.saveSeasons(severance.id, customStructure(null, [9], NOW));
 	const state = await store.loadAll();
-	assert.deepEqual(state.profile, { name: 'Dario', birthday: '1990-05-04' });
+	const { updatedAt, ...profile } = state.profile;
+	assert.deepEqual(profile, { name: 'Dario', birthday: '1990-05-04' });
+	assert.match(updatedAt, /^\d{4}-/, 'serve all’unione dei backup');
 	assert.equal(state.settings.detailMode, 'full');
 	assert.equal(state.onboarding.step, 'cards');
 	assert.equal(state.movies.get('tt0078748').details.director, 'Ridley Scott');

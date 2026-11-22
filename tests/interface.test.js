@@ -140,7 +140,7 @@ test('greets on the birthday and wires onboarding, banner, key dialog and Androi
 	const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 	const index = read('../www/index.html');
 	for (const id of ['onboarding', 'mode-banner', 'completion-indicator', 'omdb-key-dialog', 'series-structure-dialog', 'movie-info-series']) assert.match(index, new RegExp(`id="${id}"`));
-	assert.match(read('../www/style.css'), /html\[data-onboarding="true"\] \.site-shell \{ display: none; \}/);
+	assert.match(read('../www/style.css'), /html\[data-onboarding="true"\] \.site-shell > :not\(dialog\) \{ display: none; \}/, 'le finestre restano visibili durante l’onboarding');
 	const pkg = JSON.parse(read('../package.json'));
 	for (const plugin of ['@capacitor/app', '@capacitor/browser', '@capacitor/clipboard']) assert.ok(pkg.dependencies[plugin], plugin);
 	const keySetup = read('../www/assets/js/key-setup.js');

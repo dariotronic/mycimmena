@@ -11,6 +11,7 @@ android/local.properties
 android/.idea/
 *.apk
 *.aab
+dist/
 
 # Firma: MAI nella repo
 *.jks

@@ -4,11 +4,12 @@
 // Store (versione 2 dello schema):
 // - movies     catalogo dei titoli conosciuti, per id IMDb: { id, title, year, type, posterUrl, stars, details (OMDb),
 //              detailsFetchedAt, seasons (struttura delle stagioni delle serie, vedi series.js) }
-// - watchlist  { movieId, addedAt, hype (0–5 o null), note }
+// - watchlist  { movieId, addedAt, hype (0–5 o null), note, source ('app' | 'letterboxd' | 'imdb'), updatedAt }
 // - viewings   il diario: { id, movieId, date, place, withWhom, rating (0,5–10 o null), notes (HTML filtrato), createdAt, updatedAt;
 //              per le serie anche episodes [{ s, e }], scope ('episodes' | 'season' | 'series'), season, round }
 // - posters    locandine salvate per vederle offline: { movieId, blob, savedAt }
-// - kv         record singoli per chiave: 'planned' (la serata in programma), 'profile', 'settings', 'onboarding', 'meta'
+// - kv         record singoli per chiave: 'planned' (la serata in programma), 'profile', 'settings', 'onboarding', 'meta',
+//              'import' (l'importazione della watchlist in corso, vedi watchlist-import.js)
 // - series     avanzamento delle serie (dalla versione 2): { movieId, status, round, startedAt, updatedAt }
 import { sanitizeNotes } from './sanitize.js';
 import { normalizeEpisodes, SERIES_STATUSES } from './series.js';
@@ -115,6 +116,21 @@ function seriesFields(input, existing) {
 	};
 }
 
+// Unione di un titolo presente sia sul telefono sia nel backup: dettagli e stagioni più recenti; i dati di base
+// del telefono, completati con quelli del backup dove mancano.
+export function mergeMovie(local, incoming) {
+	const localNewer = (a, b) => String(a || '') >= String(b || '');
+	const keepLocalDetails = Boolean(local.details) && localNewer(local.detailsFetchedAt, incoming.detailsFetchedAt);
+	const keepLocalSeasons = Boolean(local.seasons) && localNewer(local.seasons?.updatedAt, incoming.seasons?.updatedAt);
+	return {
+		...incoming,
+		...Object.fromEntries(Object.entries(local).filter(([, value]) => value !== '' && value !== null && value !== undefined)),
+		details: keepLocalDetails ? local.details : (incoming.details || local.details || null),
+		detailsFetchedAt: keepLocalDetails ? local.detailsFetchedAt : (incoming.detailsFetchedAt || local.detailsFetchedAt || null),
+		seasons: keepLocalSeasons ? local.seasons : (incoming.seasons || local.seasons || null)
+	};
+}
+
 export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME } = {}) {
 	let dbPromise = null;
 
@@ -162,16 +178,16 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	// Tutto quello che serve alle viste, in una lettura sola. Le locandine restano fuori: le carica posters.js.
 	async function loadAll() {
 		return transaction(['movies', 'watchlist', 'viewings', 'kv', 'series'], 'readonly', async ({ movies, watchlist, viewings, kv, series }) => {
-			const [movieList, watchlistEntries, viewingList, seriesList, planned, meta, profile, settings, onboarding] = await Promise.all([
+			const [movieList, watchlistEntries, viewingList, seriesList, planned, meta, profile, settings, onboarding, importJob] = await Promise.all([
 				request(movies.getAll()), request(watchlist.getAll()), request(viewings.getAll()), request(series.getAll()),
-				getKv(kv, 'planned'), getKv(kv, 'meta'), getKv(kv, 'profile'), getKv(kv, 'settings'), getKv(kv, 'onboarding')
+				getKv(kv, 'planned'), getKv(kv, 'meta'), getKv(kv, 'profile'), getKv(kv, 'settings'), getKv(kv, 'onboarding'), getKv(kv, 'import')
 			]);
 			return {
 				movies: new Map(movieList.map(movie => [movie.id, movie])),
 				watchlist: watchlistEntries,
 				viewings: viewingList,
 				series: new Map(seriesList.map(record => [record.movieId, record])),
-				planned, meta, profile, settings, onboarding
+				planned, meta, profile, settings, onboarding, importJob
 			};
 		});
 	}
@@ -181,7 +197,8 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	async function updateKv(key, patch) {
 		if (!KV_KEYS.includes(key)) throw new Error(`Chiave sconosciuta: ${key}`);
 		return transaction('kv', 'readwrite', async ({ kv }) => {
-			const next = { ...(await getKv(kv, key) || {}), ...patch };
+			// updatedAt serve all'unione dei backup (vince la versione modificata più di recente); meta resta solo qui.
+			const next = { ...(await getKv(kv, key) || {}), ...patch, ...(key === 'meta' ? {} : { updatedAt: nowIso() }) };
 			await putKv(kv, key, next);
 			return next;
 		});
@@ -288,16 +305,19 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	}
 
 	// Aggiunge titoli alla watchlist; quelli già presenti si saltano. Restituisce gli id aggiunti davvero.
+	// Dall'importazione arrivano anche addedAt (la data originale) e source ('letterboxd' | 'imdb').
 	async function addToWatchlist(movieList) {
-		const items = movieList.map(normalizeMovie);
+		const items = movieList.map(movie => ({ ...normalizeMovie(movie), addedAt: movie.addedAt, source: movie.source }));
 		return transaction(['movies', 'watchlist'], 'readwrite', async ({ movies, watchlist }) => {
 			const added = [];
 			for (const movie of items) {
 				const known = await request(movies.get(movie.id));
 				// I dettagli già scaricati restano: un nuovo risultato di ricerca non li cancella.
-				await request(movies.put(known ? { ...known, ...movie, details: known.details || movie.details, detailsFetchedAt: known.detailsFetchedAt || movie.detailsFetchedAt } : movie));
+				const { addedAt, source, ...fields } = movie;
+				await request(movies.put(known ? { ...known, ...fields, details: known.details || fields.details, detailsFetchedAt: known.detailsFetchedAt || fields.detailsFetchedAt, seasons: known.seasons || fields.seasons } : fields));
 				if (await request(watchlist.get(movie.id))) continue;
-				await request(watchlist.put({ movieId: movie.id, addedAt: nowIso(), hype: null, note: null }));
+				const stamp = nowIso();
+				await request(watchlist.put({ movieId: movie.id, addedAt: DATE.test(String(addedAt || '').slice(0, 10)) ? addedAt : stamp, hype: null, note: null, source: ['letterboxd', 'imdb'].includes(source) ? source : 'app', updatedAt: stamp }));
 				added.push(movie.id);
 			}
 			return added;
@@ -319,7 +339,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		return transaction('watchlist', 'readwrite', async ({ watchlist }) => {
 			const entry = await request(watchlist.get(movieId));
 			if (!entry) throw new Error('Il titolo non è più nella watchlist.');
-			await request(watchlist.put({ ...entry, hype: value }));
+			await request(watchlist.put({ ...entry, hype: value, updatedAt: nowIso() }));
 			return value;
 		});
 	}
@@ -387,6 +407,62 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		await transaction('viewings', 'readwrite', ({ viewings }) => request(viewings.delete(id)));
 	}
 
+	// Importazione della watchlist in corso (watchlist-import.js): si salva per poterla riprendere.
+	async function getImportJob() {
+		return transaction('kv', 'readonly', ({ kv }) => getKv(kv, 'import'));
+	}
+	async function saveImportJob(job) {
+		await transaction('kv', 'readwrite', ({ kv }) => putKv(kv, 'import', job));
+	}
+	async function clearImportJob() {
+		await transaction('kv', 'readwrite', ({ kv }) => request(kv.delete('import')));
+	}
+
+	// Tutto quello che va nel backup (backup.js), locandine e dati locali (meta, importazione) esclusi.
+	async function exportData() {
+		return transaction(['movies', 'watchlist', 'viewings', 'series', 'kv'], 'readonly', async ({ movies, watchlist, viewings, series, kv }) => {
+			const [movieList, watchlistEntries, viewingList, seriesList, planned, profile, settings, onboarding] = await Promise.all([
+				request(movies.getAll()), request(watchlist.getAll()), request(viewings.getAll()), request(series.getAll()),
+				getKv(kv, 'planned'), getKv(kv, 'profile'), getKv(kv, 'settings'), getKv(kv, 'onboarding')
+			]);
+			return { movies: movieList, watchlist: watchlistEntries, viewings: viewingList, series: seriesList, planned, profile, settings, onboarding };
+		});
+	}
+
+	// Ripristino di un backup già controllato da backup.js (parseBackup), tutto in una transazione.
+	// - 'replace': i dati attuali si cancellano e restano quelli del backup (le locandine salvate restano).
+	// - 'merge': per ogni voce vince quella modificata più di recente; le voci che ci sono da una parte sola restano.
+	async function restoreData(data, { mode = 'merge' } = {}) {
+		if (!['merge', 'replace'].includes(mode)) throw new Error('Modo di ripristino sconosciuto.');
+		return transaction(['movies', 'watchlist', 'viewings', 'series', 'kv'], 'readwrite', async ({ movies, watchlist, viewings, series, kv }) => {
+			if (mode === 'replace') {
+				for (const objectStore of [movies, watchlist, viewings, series]) await request(objectStore.clear());
+				for (const key of ['planned', 'profile', 'settings', 'onboarding']) await request(kv.delete(key));
+			}
+			const putNewer = async (objectStore, key, record, stampOf) => {
+				const local = mode === 'merge' ? await request(objectStore.get(key)) : null;
+				if (!local || stampOf(record) > stampOf(local)) await request(objectStore.put(record));
+			};
+			for (const movie of data.movies) {
+				const local = mode === 'merge' ? await request(movies.get(movie.id)) : null;
+				await request(movies.put(local ? mergeMovie(local, movie) : movie));
+			}
+			for (const entry of data.watchlist) await putNewer(watchlist, entry.movieId, entry, item => String(item.updatedAt || item.addedAt || ''));
+			for (const viewing of data.viewings) await putNewer(viewings, viewing.id, viewing, item => String(item.updatedAt || item.createdAt || ''));
+			for (const record of data.series) await putNewer(series, record.movieId, record, item => String(item.updatedAt || ''));
+			for (const key of ['planned', 'profile', 'settings', 'onboarding']) {
+				const incoming = data[key];
+				if (!incoming) continue;
+				const local = mode === 'merge' ? await getKv(kv, key) : null;
+				let next = !local || String(incoming.updatedAt || '') > String(local.updatedAt || '') ? incoming : local;
+				// L'onboarding fatto su uno dei due telefoni vale per entrambi.
+				if (key === 'onboarding' && (local?.done || incoming.done)) next = { ...next, done: true };
+				await putKv(kv, key, next);
+			}
+			return { mode };
+		});
+	}
+
 	async function getPoster(movieId) {
 		return transaction('posters', 'readonly', ({ posters }) => request(posters.get(movieId)).then(record => record?.blob || null));
 	}
@@ -417,7 +493,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 
 	return {
 		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, setSeriesStatus, restartSeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
-		addViewing, updateViewing, deleteViewing, getPoster, savePoster, posterIds, requestPersistence, STORES
+		addViewing, updateViewing, deleteViewing, getPoster, savePoster, posterIds, requestPersistence, getImportJob, saveImportJob, clearImportJob, exportData, restoreData, STORES
 	};
 }
 

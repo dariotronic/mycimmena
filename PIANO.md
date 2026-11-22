@@ -38,16 +38,15 @@ L'app si distribuisce come APK fuori dal Play Store. I dati dell'utente restano 
 - **Capacitor** con progetto Android in `android/`. Il codice web sta in `www/` e resta JavaScript vanilla senza bundler: `npx cap sync` lo copia nell'APK.
 - `index.php` del sito diventa `www/index.html` statico (sprite SVG e dialog). Niente nonce né CSP generata da PHP: la CSP va in un `<meta>`. Niente import map: sul sito serviva solo a dare una versione ai file per la cache, nell'APK i file sono locali.
 - Plugin previsti:
-  - `@capacitor/preferences`: impostazioni piccole
-  - `@capacitor/filesystem`: backup, locandine salvate, APK scaricato
-  - `@capacitor/share`: esportazione del backup
+  - `@capacitor/filesystem`: backup in Documenti (e in v2 l'APK scaricato); le locandine stanno in IndexedDB
+  - `@capacitor/share`: esportazione del backup con il menu Condividi
   - `@capacitor/local-notifications`: compleanno e serata in programma
   - `@capacitor/browser`: pagina di registrazione OMDb, link esterni (Instagram, GitHub)
   - `@capacitor/app`: tasto Indietro (già dalla Fase 0), versione dell'app e ritorno in primo piano
   - `@capacitor/clipboard`: rilevamento della chiave copiata
   - `CapacitorHttp` (incluso nel core): **non serve** per IMDb, OMDb, le locandine e GitHub, che rispondono con CORS anche all'origine dell'app (`https://localhost`), verificato in Fase 1: basta `fetch`. Resta un'opzione per `feedback.php` se il server non manda le intestazioni CORS
-  - Un selettore di file per l'importazione (backup JSON e CSV/ZIP di Letterboxd e IMDb), per esempio `@capawesome/capacitor-file-picker` (da verificare)
-  - Un plugin per aprire l'APK con l'installer (per esempio `@capacitor-community/file-opener`, da verificare)
+  - Nessun plugin per scegliere i file: `<input type="file">` apre il selettore di Android (Capacitor lo gestisce già), per il backup e per i file di Letterboxd e IMDb
+  - In v2 (Fase 5), un plugin per aprire l'APK con l'installer (per esempio `@capacitor-community/file-opener`, da verificare)
 
 ### Versione minima di Android
 - **Android 7.0 (API 24)**: è il `minSdkVersion` di Capacitor 8, la versione attuale. Se in Fase 0 la versione di Capacitor in uso ne richiede una diversa, si aggiorna questa riga.
@@ -79,7 +78,7 @@ L'app si distribuisce come APK fuori dal Play Store. I dati dell'utente restano 
 
 ## 3. Modello dati
 
-Store IndexedDB (schema versione 1, in `www/assets/js/store.js`). `profile`, `settings`, `planned` e `meta` sono record singoli nello store `kv`, per chiave; `posters` tiene le locandine.
+Store IndexedDB (schema versione 2, in `www/assets/js/store.js`). `profile`, `settings`, `onboarding`, `planned`, `meta` e `import` (l'importazione della watchlist in corso) sono record singoli nello store `kv`, per chiave; `posters` tiene le locandine. `profile`, `settings`, `onboarding` e `planned` hanno `updatedAt`, che serve all'unione dei backup.
 
 - **`profile`** (record unico): `name`, `birthday` (facoltativa), risposte di flavour dell'onboarding (§4), `createdAt`.
 - **`settings`** (record unico):
@@ -91,7 +90,7 @@ Store IndexedDB (schema versione 1, in `www/assets/js/store.js`). `profile`, `se
   - preferenze di watchlist e randomizer
 - **`movies`**: catalogo dei titoli conosciuti, per id IMDb: `id`, `title`, `year`, `type` (`movie`/`series`), `posterUrl`, `posterLocal`, `stars` (da IMDb), `details` (oggetto OMDb o `null`), `detailsFetchedAt`.
   - Solo per le serie, **`seasons`**: la struttura delle stagioni (§7), o `null` se non è ancora nota.
-- **`watchlist`**: `movieId`, `addedAt`, `hype` (0–5, oppure `null` se non votato), `note`, `source` (`'app' | 'letterboxd' | 'imdb'`).
+- **`watchlist`**: `movieId`, `addedAt`, `hype` (0–5, oppure `null` se non votato), `note`, `source` (`'app' | 'letterboxd' | 'imdb'`), `updatedAt`.
 - **`viewings`** (il diario, sostituisce archivio e recensioni):
   - `id`, `movieId`, `date`
   - `place` e `withWhom`, facoltativi
@@ -102,7 +101,7 @@ Store IndexedDB (schema versione 1, in `www/assets/js/store.js`). `profile`, `se
   - Un film può avere più visioni (rivisto).
 - **`series`**: avanzamento delle serie, per `movieId`: `status` (`'watching' | 'paused' | 'finished' | 'dropped'`), `round` (1 al primo giro, 2 se la si riguarda…), `startedAt`, `updatedAt`. Gli episodi visti si ricavano dalle `viewings` del giro corrente, così non ci sono due copie da tenere allineate.
 - **`planned`** (record unico, facoltativo): la prossima serata in programma, con `date`, `place` e `movieIds` ordinati. È l'erede dell'"appuntamento".
-- **`meta`**: `schemaVersion`, `lastBackupAt`, `feedbackSentAt[]`, `updateCheck` (§10: `lastAt`, `etag`, `latest`, `rateLimitResetAt`, `dismissedVersion`, `dismissedUntil`).
+- **`meta`** (solo di questo telefono, non va nel backup): `lastBackupAt`, `backupReminderAt`, `feedbackSentAt[]`, `updateCheck` (§10: `lastAt`, `etag`, `latest`, `remaining`, `resetAt`, `dismissedVersion`, `dismissedUntil`).
 
 ---
 
@@ -131,8 +130,7 @@ Ogni passaggio ha "Indietro". Alla fine niente è definitivo: tutto si cambia da
 8. **Hai già una watchlist altrove?** Si possono portare in myCimmena i film da vedere salvati su Letterboxd o IMDb. Due schede, una per servizio, con i passaggi per scaricare il file (dettagli in §9):
    - **Letterboxd:** dal sito (non dall'app), Impostazioni → Data → "Export your data". Si scarica un file `.zip`: myCimmena lo legge così com'è, non serve estrarlo.
    - **IMDb:** dal sito, apri la tua Watchlist → menu "⋯" → "Export". Il file si prepara nella pagina "Your exports", da cui si scarica il `.csv`.
-   - Pulsanti: **"Ho il file, importa"** (apre il selettore e poi il riepilogo di §9) e **"Più tardi"**, con la nota "Lo trovi sempre in Impostazioni → Importa watchlist".
-   - Se l'utente ha scelto Light, una riga avverte che con Letterboxd l'abbinamento dei titoli è un po' meno preciso (§9).
+   - Pulsanti: **"Ho il file, importa"** (apre la finestra dell'importazione di §9) e **"Più tardi"**, con la nota "Lo trovi sempre in Impostazioni → Importa watchlist".
 9. **Fine:** "Ciao, {nome}!" e si entra nella Watchlist (vuota, con un invito a cercare il primo film, oppure con i film importati).
 
 Se l'app viene chiusa a metà, al riavvio riparte dal passaggio raggiunto.
@@ -257,10 +255,11 @@ seasons: {
 
 ## 8. Backup
 
-- **Esporta:** un file `mycimmena-backup-AAAA-MM-GG.json` con profilo, impostazioni (chiave OMDb compresa, avvisando l'utente), film, struttura delle serie, avanzamento, watchlist, diario, serata in programma e versione dello schema. Si salva in Documenti o si condivide (Drive, mail, Telegram…) con il menu di Android.
-- **Importa:** sceglie un file e mostra un riepilogo ("120 film, 45 visioni, salvato il …"). L'utente sceglie tra **sostituire** tutto o **unire**: nell'unione vince la voce modificata più di recente. Le locandine non sono nel backup e si riscaricano.
-- **Promemoria:** se non c'è un backup da 30 giorni e ci sono dati nuovi, un toast con "Esporta ora".
-- Il backup è anche il modo per cambiare telefono.
+- **Esporta:** un file `mycimmena-backup-AAAA-MM-GG.json` con profilo, impostazioni (chiave OMDb compresa, avvisando l'utente), film, struttura delle serie, avanzamento, watchlist, diario, serata in programma e versione dello schema. "Salva in Documenti" lo scrive in `Documenti/myCimmena/` (fino ad Android 10 chiede il permesso della memoria); "Condividi…" apre il menu di Android (Drive, mail, Telegram…).
+- **Importa:** sceglie un file e mostra un riepilogo ("120 titoli nella watchlist, 45 visioni nel diario, salvato il …"). L'utente sceglie tra **sostituire** tutto (con conferma) o **unire**: nell'unione vince la voce modificata più di recente; le cancellazioni non si propagano (una voce tolta su un telefono ma presente nel backup torna). Le locandine non sono nel backup e si riscaricano.
+- Il file viene da fuori: ogni voce si ricontrolla con le regole del salvataggio normale (note filtrate di nuovo, voti nei limiti, chiave solo alfanumerica) e quelle non valide si saltano, contandole.
+- **Promemoria:** all'apertura, se l'ultimo backup (o la fine dell'onboarding) ha più di 30 giorni e ci sono dati nuovi, un toast con "Esporta ora", al massimo una volta al giorno. Si spegne con l'interruttore "Ricordamelo dopo 30 giorni senza backup" nelle Impostazioni (`settings.backupReminder`).
+- Il backup è anche il modo per cambiare telefono: il benvenuto dell'onboarding ha "Ho un backup: ripristinalo".
 
 ---
 
@@ -280,10 +279,11 @@ Si raggiunge dall'onboarding (§4, passaggio 8) e da Impostazioni → "Importa w
 - Le voci dei menu dei due siti vanno ricontrollate quando si implementa: se cambiano, si aggiornano i testi.
 
 ### Come funziona
-- Il selettore accetta `.zip` e `.csv`. Lo zip si apre nell'app con una piccola libreria (per esempio `fflate`, copiata in `www/assets/js/vendor/`, senza bundler).
+- Il selettore accetta `.zip` e `.csv`. Lo zip si apre con un lettore minimo scritto nell'app (`zip.js`), che usa `DecompressionStream('deflate-raw')` della WebView: niente librerie esterne.
 - L'app riconosce il formato dalle intestazioni delle colonne, non dal nome del file.
 - **IMDb:** ogni riga ha già l'id (`tt…`): l'abbinamento è esatto. Titolo, anno e tipo vengono dal CSV, la locandina dalla ricerca IMDb, i dettagli da OMDb in sottofondo se la chiave c'è (§5).
-- **Letterboxd:** il CSV non ha l'id IMDb. L'app cerca ogni titolo con l'endpoint di suggerimenti di IMDb e tiene il risultato con titolo e anno uguali (anno ±1 di tolleranza). Le ricerche vanno piano (per esempio una ogni mezzo secondo) con l'indicatore "Abbinamento 34/120".
+- **Letterboxd:** il CSV non ha l'id IMDb. L'app cerca ogni titolo con l'endpoint di suggerimenti di IMDb (prima "titolo anno", poi solo il titolo) e tiene il risultato con titolo e anno uguali (anno ±1 di tolleranza; titoli confrontati senza accenti, punteggiatura e articolo iniziale). Le ricerche vanno piano (una ogni mezzo secondo) con l'indicatore "Abbinamento 34/120". L'abbinamento non usa OMDb, quindi è uguale in light e in completa.
+- Il file dei voti di IMDb e quelli di Letterboxd con voti o diario si riconoscono dalle colonne e si rifiutano con un messaggio che dice quale file scegliere.
 - **Riepilogo prima di salvare:** "118 trovati, 2 da controllare, 5 già nella tua watchlist". I titoli dubbi (più risultati o nessuno) si sistemano uno per uno scegliendo tra i candidati, oppure si saltano.
 - La data di aggiunta originale diventa `addedAt`; l'hype resta vuoto. I doppioni non si importano due volte.
 - L'importazione si può interrompere: quello già abbinato resta e si può riprendere.
@@ -292,7 +292,8 @@ Si raggiunge dall'onboarding (§4, passaggio 8) e da Impostazioni → "Importa w
 
 ## 10. Aggiornamenti
 
-- La versione sta in `package.json` e in `android/app/build.gradle` (`versionName` 1.2.0, `versionCode` intero crescente). Un piccolo script le tiene allineate.
+- La versione sta in `package.json`, `www/assets/js/app-info.js` e `android/app/build.gradle` (`versionName` 1.2.0, `versionCode` = major·10000 + minor·100 + patch). `npm run set-version -- 1.2.0` (`tools/version.js`) le cambia tutte; `npm test` controlla che siano allineate.
+- La versione di debug ha id `it.mycimmena.app.debug` e nome "myCimmena dev": convive con quella delle Release.
 - **Pubblicare:**
   1. Compilare l'APK firmato.
   2. Creare su GitHub una Release con tag `v1.2.0`, APK allegato (`mycimmena-1.2.0.apk`) e note in italiano.
@@ -304,7 +305,7 @@ Si raggiunge dall'onboarding (§4, passaggio 8) e da Impostazioni → "Importa w
 
 ### Restare nei limiti di GitHub
 GitHub concede 60 richieste l'ora **per indirizzo IP** senza login, e il conto è condiviso con tutto quello che passa dalla stessa rete. Un controllo all'ora più uno per apertura ne usa pochi, ma l'app si protegge comunque:
-- Ogni richiesta manda l'**ETag** dell'ultima risposta (`If-None-Match`). Se non c'è una release nuova GitHub risponde `304`, che non consuma il limite.
+- Ogni richiesta manda l'**ETag** dell'ultima risposta (`If-None-Match`). Se non c'è una release nuova GitHub risponde `304` (secondo la documentazione di GitHub il `304` non consuma il limite solo per le richieste autenticate: l'app comunque ne fa poche). GitHub permette `If-None-Match` ed espone `ETag` e `X-RateLimit-*` via CORS (verificato).
 - L'app legge `X-RateLimit-Remaining` e `X-RateLimit-Reset` e li salva in `meta.updateCheck`. I controlli automatici si fermano quando ne restano meno di 5 e ripartono dopo l'ora indicata da GitHub.
 - Il pulsante manuale funziona sempre, salvo due casi:
   - Se è stato premuto meno di 30 secondi prima, risponde con l'esito dell'ultimo controllo invece di rifare la richiesta.
@@ -320,8 +321,8 @@ GitHub concede 60 richieste l'ora **per indirizzo IP** senza login, e il conto �
 - **v2:** download dentro l'app (Filesystem) e apertura dell'installer. Richiede il permesso `REQUEST_INSTALL_PACKAGES` e un FileProvider. Android chiede una sola volta di consentire a myCimmena di "installare app sconosciute".
 
 ### Firma
-- Tutti gli APK vanno firmati con **la stessa chiave** (`mycimmena-release.jks`). Se la chiave si perde, gli aggiornamenti non si installano più sopra la versione vecchia: bisogna disinstallare e si perdono i dati senza backup.
-- La chiave e le password **non** vanno nella repo. Copie di sicurezza in almeno due posti; se si usa GitHub Actions, la chiave va nei Secrets.
+- Tutti gli APK vanno firmati con **la stessa chiave** (`mycimmena-release.jks`, RSA 4096, CN=myCimmena, creata in Fase 3). Se la chiave si perde, gli aggiornamenti non si installano più sopra la versione vecchia: bisogna disinstallare e si perdono i dati senza backup.
+- La chiave e le password **non** vanno nella repo: stanno in `%USERPROFILE%\.mycimmena\` (o dove indica `MYCIMMENA_SIGNING`), e `build.gradle` le legge da lì (README, "Firma"). Copie di sicurezza in almeno due posti; se si usa GitHub Actions, la chiave va nei Secrets.
 - La repo è **pubblica**, così le Release si scaricano senza login.
 
 ---
@@ -391,7 +392,7 @@ Una variante "my" dei temi del Club: stessa struttura di variabili CSS di `style
   - L'app contatta solo IMDb, OMDb e GitHub, e il server delle segnalazioni quando l'utente ne invia una.
   - Cosa contiene una segnalazione (§11), e che non viene conservata dopo l'invio della mail.
   - Nessuna pubblicità, nessuna statistica d'uso.
-- Licenze dei componenti usati (Capacitor, caratteri, `fflate`…).
+- Licenze dei componenti usati (Capacitor e i suoi plugin, caratteri, icone).
 
 ### Credit
 In fondo alle Impostazioni, piccolo e centrato, sotto tutto il resto:
@@ -472,10 +473,12 @@ Alla fine della Fase 0 l'app si apre con dati vuoti: ogni modifica risponde "Non
 - [x] Prova con una chiave OMDb vera sul telefono: verifica, completamento in sottofondo, dettagli, struttura delle stagioni e titoli degli episodi scaricati quando si apre la stagione. Le trame di OMDb sono in inglese.
 
 **Fase 3: backup, importazione e distribuzione**
-- [ ] Esportazione e importazione del backup (sostituisci/unisci), promemoria
-- [ ] Importazione della watchlist da Letterboxd (zip/csv) e IMDb (csv), con abbinamento e riepilogo
-- [ ] Chiave di firma, APK di release, prima Release GitHub
-- [ ] Controllo aggiornamenti all'apertura, ogni ora e manuale, con ETag e limiti (v1: apertura nel browser)
+- [x] Esportazione (Documenti o Condividi) e importazione del backup (sostituisci/unisci), promemoria, ripristino dal benvenuto
+- [x] Importazione della watchlist da Letterboxd (zip/csv) e IMDb (csv), con abbinamento, riepilogo, titoli da controllare, interruzione e ripresa
+- [x] Chiave di firma (fuori dalla repo), APK di release firmato, script di versione e di release, versione di debug separata
+- [x] Prova sul telefono: ripristino dal benvenuto, importazione di uno zip di Letterboxd con le ricerche IMDb vere, salvataggio in Documenti, menu Condividi, interruttore del promemoria, aggiornamenti (con una release simulata), APK di release firmato con ripristino del backup dal selettore di file di Android
+- [ ] Prima Release GitHub (v0.3.0)
+- [x] Controllo aggiornamenti all'apertura, ogni ora e manuale, con ETag e limiti (v1: apertura nel browser)
 
 **Fase 4: segnalazioni e notifiche**
 - [ ] `server/feedback.php` e deploy su IONOS

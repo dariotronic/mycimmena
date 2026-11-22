@@ -28,6 +28,9 @@ import { createDetails } from './assets/js/details.js';
 import { createSeriesUi, renderSeriesSection } from './assets/js/series-ui.js';
 import { createOnboarding } from './assets/js/onboarding.js';
 import { createSettings } from './assets/js/settings.js';
+import { createBackupUi } from './assets/js/backup-ui.js';
+import { createImportUi } from './assets/js/import-ui.js';
+import { createUpdates } from './assets/js/update-ui.js';
 
 hydrateIcons(document);
 
@@ -98,6 +101,7 @@ const viewRenderer = createViews({
 	formatDate,
 	infoButton,
 	meetingMovies,
+	renderVersionRow: () => updates.renderVersionRow(),
 	movieDetails,
 	movieName,
 	poster,
@@ -116,11 +120,31 @@ const diary = createDiary({
 });
 createSeriesUi({ app, store, details, getData, refresh, ask, askConfirmation, openViewing: target => diary.openViewingForm(target), refreshMovieInfo });
 const settings = createSettings({ store, details, getData, refresh });
+// Dopo un ripristino o un'importazione: locandine e dettagli dei titoli nuovi in sottofondo.
+const completeNewTitles = ids => {
+	if (!state) return;
+	posters.ensure([...state.movies.values()].filter(movie => !ids || ids.includes(movie.id)));
+	details.complete(ids);
+};
+const backup = createBackupUi({ store, getData, getState: () => state, refresh, askConfirmation, onRestored: () => completeNewTitles() });
+const importer = createImportUi({ store, getData, refresh: loadData, askConfirmation, onImported: completeNewTitles });
+// Gli aggiornamenti ridisegnano senza disturbare chi sta scrivendo; l'avviso non copre l'onboarding.
+const updates = createUpdates({
+	store,
+	getData,
+	refresh: async () => {
+		await loadData();
+		renderWhenIdle();
+	},
+	canShowDialog: () => !onboarding.isActive() && !document.querySelector('dialog[open]')
+});
 const onboarding = createOnboarding({
 	store,
 	details,
 	getData,
 	refresh: loadData,
+	openBackup: () => backup.open(),
+	openImport: options => importer.open(options),
 	onFinish: () => {
 		location.hash = '#lista';
 		render();
@@ -265,6 +289,15 @@ function bindViewEvents() {
 	search.bind(route());
 	diary.bind();
 	settings.bind();
+	updates.bind();
+	document.querySelector('[data-open-backup]')?.addEventListener('click', () => backup.open());
+	document.querySelector('[data-backup-reminder]')?.addEventListener('click', async event => {
+		const on = event.currentTarget.getAttribute('aria-checked') !== 'true';
+		await store.updateKv('settings', { backupReminder: on });
+		await refresh();
+		showToast('backupReminderChanged', { on });
+	});
+	document.querySelector('[data-open-import]')?.addEventListener('click', () => importer.open());
 }
 
 // Cambio di vista accessibile: <main> non è una regione aria-live (lo screen reader rileggerebbe tutta la pagina
@@ -303,4 +336,7 @@ window.addEventListener('online', () => state && posters.ensure([...state.movies
 	if (state) posters.ensure([...state.movies.values()]);
 	// Modalità completa: si completano in sottofondo le schede dei titoli salvati senza dettagli.
 	details.complete();
+	// Aggiornamenti: subito, poi ogni ora e al ritorno in primo piano. Promemoria del backup se è vecchio.
+	updates.start();
+	backup.maybeRemind().catch(error => console.warn('Promemoria del backup non disponibile.', error));
 })();

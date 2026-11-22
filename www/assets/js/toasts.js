@@ -44,6 +44,18 @@ export const TOASTS = {
 	seriesStructureSaved: { enabled: true, message: 'Stagioni salvate' },
 	seriesRated: { enabled: true, message: 'Voto salvato nel diario' },
 
+	// Backup e importazione
+	backupSaved: { enabled: true, duration: 4000, message: ({ where, path }) => ({ documents: 'Backup salvato in Documenti/myCimmena', shared: 'Backup pronto da condividere', download: 'Backup scaricato' })[where] || 'Backup salvato' },
+	backupRestored: { enabled: true, message: ({ mode }) => mode === 'replace' ? 'Backup ripristinato' : 'Backup unito ai tuoi dati' },
+	backupReminderChanged: { enabled: true, message: ({ on }) => on ? 'Promemoria del backup attivo' : 'Promemoria del backup spento' },
+	backupReminder: { enabled: true, message: 'È da un po’ che non fai un backup: i dati stanno solo su questo telefono.' },
+	importMatched: { enabled: true, message: 'Abbinamento finito: apri Impostazioni → Importa watchlist per il riepilogo' },
+	watchlistImported: { enabled: true, message: ({ count }) => count === 1 ? '1 titolo importato nella watchlist' : `${count} titoli importati nella watchlist` },
+
+	// Aggiornamenti
+	updateNone: { enabled: true, message: ({ message }) => message || 'Hai già l’ultima versione' },
+	updateDownloading: { enabled: true, duration: 5000, message: 'Download avviato: al termine apri il file per installare l’aggiornamento' },
+
 	// Impostazioni
 	profileSaved: { enabled: true, message: 'Profilo salvato' },
 	keySaved: { enabled: true, message: 'Chiave OMDb attiva: le schede si completano da sole' },

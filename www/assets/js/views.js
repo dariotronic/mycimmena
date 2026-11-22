@@ -9,6 +9,7 @@ import { soundEnabled } from './slot-sounds.js';
 import { APP_VERSION, CREDIT_HANDLE, CREDIT_URL, REPO_URL } from './app-info.js';
 import { COMPANY, diaryDefaults, flavourLine, isBirthday, LANGUAGES, PLACES, POPCORN, SPECTATORS } from './profile.js';
 import { renderWatchingRow } from './series-ui.js';
+import { IMPORT_SOURCES } from './watchlist-import.js';
 
 // Gatto SVG (simboli #cat-full e #cat-empty in index.html): la sagoma vuota sotto, quella calico sopra,
 // ritagliata da CSS in base allo stato della cella (full, half, empty).
@@ -51,7 +52,9 @@ export function createViews(context) {
 		poster,
 		selectableMovies,
 		titleWithInfo,
-		today
+		today,
+		// Riga "Versione" con il controllo degli aggiornamenti (update-ui.js).
+		renderVersionRow = () => `<div class="profile-setting-row"><div><p class="field-label">Versione</p><span>myCimmena ${escapeHtml(APP_VERSION)}</span></div></div>`
 	} = context;
 	function moviePosterButton(movie, className, extraClass = '') {
 		const buttonClass = ['movie-poster-trigger', extraClass].filter(Boolean).join(' ');
@@ -839,6 +842,8 @@ export function createViews(context) {
 		// Della chiave si mostrano solo gli ultimi due caratteri, per riconoscerla senza svelarla.
 		const maskedKey = key ? `••••••${key.slice(-2)}` : '';
 		const flavour = flavourLine(profile);
+		const lastBackup = data.meta?.lastBackupAt || '';
+		const reminderOn = data.settings?.backupReminder !== false;
 		return `
 			${pageHeader('Impostazioni', profile.name ? `Ciao, ${profile.name}` : '')}
 			<section class="settings-panel">
@@ -891,13 +896,30 @@ export function createViews(context) {
 						</span>
 					</button>
 				</div>
+				<div class="profile-setting-row settings-backup">
+					<div>
+						<p class="field-label">Backup</p>
+						<span>${lastBackup ? `Ultimo backup: ${escapeHtml(formatDate(today(new Date(lastBackup))))}` : 'Non hai ancora fatto un backup'}</span>
+						<p class="help-text">I dati stanno solo su questo telefono: esporta un backup ogni tanto, e per cambiare telefono.</p>
+						<div class="button-row"><button class="button secondary" type="button" data-open-backup>Esporta o ripristina</button></div>
+						<div class="setting-switch-row">
+							<span id="backup-reminder-label">Ricordamelo dopo 30 giorni senza backup</span>
+							<button class="setting-switch" type="button" role="switch" aria-checked="${reminderOn}" aria-labelledby="backup-reminder-label" data-backup-reminder><span class="setting-switch-thumb" aria-hidden="true"></span></button>
+						</div>
+					</div>
+				</div>
+				<div class="profile-setting-row settings-import">
+					<div>
+						<p class="field-label">Importa watchlist</p>
+						<span>${data.importJob ? `Importazione da ${escapeHtml(IMPORT_SOURCES[data.importJob.source] || '')} lasciata a metà` : 'Da Letterboxd o IMDb'}</span>
+						<div class="button-row"><button class="button secondary" type="button" data-open-import>${data.importJob ? 'Riprendi l’importazione' : 'Importa watchlist'}</button></div>
+					</div>
+				</div>
 				<a class="profile-setting-row settings-link" href="#informazioni">
 					<div><p class="field-label">Informazioni</p><span>Fonti dei dati, privacy e licenze</span></div>
 					${icon('info')}
 				</a>
-				<div class="profile-setting-row">
-					<div><p class="field-label">Versione</p><span>myCimmena ${escapeHtml(APP_VERSION)}</span></div>
-				</div>
+				${renderVersionRow()}
 			</section>
 			<p class="app-credit">made with 🎬 by <a href="${escapeHtml(CREDIT_URL)}" target="_blank" rel="noopener noreferrer">${escapeHtml(CREDIT_HANDLE)}</a></p>
 		`;
@@ -922,7 +944,7 @@ export function createViews(context) {
 						<li>Tutti i tuoi dati (watchlist, diario, profilo, chiave OMDb) restano su questo telefono. Non ci sono account né server con i tuoi dati.</li>
 						<li>L'app contatta solo IMDb, OMDb e GitHub, e il server delle segnalazioni quando ne invii una.</li>
 						<li>Nessuna pubblicità, nessuna statistica d'uso.</li>
-						<li>Disinstallando l'app o cancellandone i dati si perde tutto: per cambiare telefono o non rischiare, esporta un backup (arriva con il prossimo aggiornamento).</li>
+							<li>Disinstallando l'app o cancellandone i dati si perde tutto: per cambiare telefono o non rischiare, esporta un backup dalle Impostazioni. Il file del backup contiene anche la tua chiave OMDb.</li>
 					</ul>
 				</section>
 				<section>
