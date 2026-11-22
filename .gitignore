@@ -1,0 +1,29 @@
+# Dipendenze
+node_modules/
+
+# Build Android (Capacitor/Gradle)
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/
+android/app/src/main/assets/public/
+android/local.properties
+android/.idea/
+*.apk
+*.aab
+
+# Firma: MAI nella repo
+*.jks
+*.keystore
+keystore.properties
+android/keystore.properties
+
+# Configurazione del server con dati privati
+server/config.php
+
+# Editor e sistema
+.idea/
+.vscode/
+*.log
+.DS_Store
+Thumbs.db
