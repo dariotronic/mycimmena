@@ -150,3 +150,17 @@ test('ships the in-app updater plugin and the release workflow without any secre
 	const mode = execFileSync('git', ['ls-files', '-s', 'android/gradlew'], { cwd: new URL('..', import.meta.url), encoding: 'utf8' });
 	assert.match(mode, /^100755/, 'gradlew eseguibile per il runner Linux');
 });
+
+test('uses the recoloured Club logo (proposal A, "Velluto") as the app icon', async () => {
+	const read = path => readFileSync(new URL(path, import.meta.url));
+	const { recolorLogo, PAPER, STOPS } = await import('../tools/icons.js');
+	assert.equal(PAPER, '#f8f2ef');
+	const original = read('../www/assets/logo.svg').toString();
+	assert.equal(read('../www/assets/logo-my.svg').toString(), recolorLogo(original), 'logo-my.svg è aggiornato: node tools/icons.js');
+	const fills = [...recolorLogo(original).matchAll(/fill:(#[0-9a-f]{6})/g)].map(match => match[1]);
+	assert.ok(fills.includes(STOPS[0]) && fills.includes(STOPS.at(-1)), 'il più scuro e il più chiaro vanno agli estremi della rampa');
+	assert.match(read('../android/app/src/main/res/values/ic_launcher_background.xml').toString(), /#F8F2EF/);
+	const foreground = read('../android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png');
+	assert.deepEqual([foreground.readUInt32BE(16), foreground.readUInt32BE(20), foreground[25]], [432, 432, 6], 'primo piano 432×432 con trasparenza');
+	assert.match(read('../android/app/src/main/res/values/styles.xml').toString(), /windowSplashScreenBackground">@color\/ic_launcher_background/);
+});

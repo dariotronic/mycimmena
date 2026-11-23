@@ -13,6 +13,7 @@ App Android personale per tenere traccia di film e serie visti e da vedere. I da
 - `tools/version.js`: cambia la versione in tutti i file (`npm run set-version -- 1.2.0`).
 - `tools/release.js`: controlla la firma dell'APK di release e lo copia in `dist/`.
 - `server/`: `feedback.php` per le segnalazioni (vedi sotto).
+- `tools/icons.js`: rigenera icona, schermate di avvio e favicon dal logo del Club ricolorato (serve Chrome).
 - `tools/copy-server.js`: copia `server/` nella repo del sito (`--check` per confrontare).
 
 ## Cosa serve

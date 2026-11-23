@@ -385,7 +385,7 @@ Una variante "my" dei temi del Club: stessa struttura di variabili CSS di `style
 - `--error-color` si sposta verso l'arancio per non confondersi con il rosso dell'accento.
 - Prima di fissare i valori: prova a schermo su un telefono vero e controllo del contrasto (almeno 4.5:1 per testo e icone su `--paper` e `--surface`).
 - Colore della barra di stato e dello splash di Android uguali a `--paper` del tema attivo.
-- **Icona:** la stessa del Club ricolorata con la nuova tavolozza, oppure una variante con "my" (§18).
+- **Icona (decisa):** il rapace del Club ricolorato con la tavolozza "my", proposta A "Velluto": rossi velluto su carta crema. `node tools/icons.js` rigenera da `www/assets/logo.svg` il logo ricolorato (`www/assets/logo-my.svg`), l'icona adattiva (primo piano trasparente con il rapace al 46%, perché alcuni launcher come quello di HONOR ingrandiscono, e sfondo `#F8F2EF`), le icone classiche e tonde, le schermate di avvio e il favicon. Da Android 12 la schermata di avvio la disegna Android con l'icona sullo sfondo crema.
 
 ---
 
@@ -524,5 +524,5 @@ Proposte; ne sceglierei 3 o 4, tutte saltabili, sulla stessa schermata. Le prime
 **Decise: tutte.** Stanno in una sola schermata, "Due chiacchiere", tutte saltabili (www/assets/js/profile.js).
 
 ### Altro
-- **Icona:** logo del Club ricolorato con la tavolozza "my", oppure una variante con "my" ben visibile.
+- **Icona:** decisa, proposta A "Velluto" (§13). Scartate: B "Popcorn" (rapace velluto su giallo) e C "Sala buia" (rapace scuro su velluto rosso).
 - **Dominio di `feedback.php`:** deciso in Fase 4: `https://www.clubdelcimmena.it/mycimmena/feedback.php`, sullo stesso spazio IONOS del sito, caricato dal deploy del sito.

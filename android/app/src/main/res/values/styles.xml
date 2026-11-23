@@ -16,7 +16,9 @@
     </style>
 
 
+    <!-- Avvio: fino ad Android 11 l'immagine splash.png; dal 12 Android disegna l'icona su questo sfondo crema (tools/icons.js). -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
     </style>
 </resources>
