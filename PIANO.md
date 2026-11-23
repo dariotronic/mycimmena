@@ -487,7 +487,8 @@ Alla fine della Fase 0 l'app si apre con dati vuoti: ogni modifica risponde "Non
 
 **Fase 4: segnalazioni e notifiche**
 - [x] `server/feedback.php` (provato con il PHP di XAMPP: controlli, immagini vere e false, campo trappola, limite di 5 al giorno, CORS)
-- [ ] Deploy su IONOS: copia in `CLUBDELCIMMENA/mycimmena/`, workflow del sito che scrive `config.php` dai Secrets, Secret `MYCIMMENA_FEEDBACK_TO`, prova di una segnalazione vera
+- [x] Deploy su IONOS: copia in `CLUBDELCIMMENA/mycimmena/`, workflow del sito che scrive `config.php` dai Secrets, Secret `MYCIMMENA_FEEDBACK_TO`, prova di una segnalazione vera dal telefono
+- [x] Release v0.4.0; la 0.3.0 installata la propone da sola all'apertura e si aggiorna sopra senza perdere i dati
 - [x] Modulo nell'app con immagini ridotte (1600 px, JPEG) e informazioni tecniche, provato sul telefono e nel browser con il server di prova
 - [x] Notifiche locali: compleanno e serata, interruttori nelle Impostazioni, permesso chiesto dopo un'azione, provate sul telefono
 
