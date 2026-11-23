@@ -37,7 +37,10 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		}
 		const inWatchlist = getData().movies.some(item => item.id === movie.id);
 		dialogTitle.textContent = viewing ? 'Modifica la visione' : scope && scope !== 'episodes' ? 'Il tuo voto' : 'Segna come visto';
-		dialogBody.innerHTML = viewRenderer.renderViewingForm({ movie, viewing, inWatchlist, scope, season, episode });
+		// Episodi: dove, con chi e (per uno nuovo) la data vengono dall'ultimo episodio della serie compilato a mano.
+		const isEpisode = viewing ? viewing.scope === 'episodes' : scope === 'episodes';
+		const prefill = isEpisode ? episodePrefill(movie.id, viewing?.id) : null;
+		dialogBody.innerHTML = viewRenderer.renderViewingForm({ movie, viewing, inWatchlist, scope, season, episode, prefill });
 		hydrateIcons(dialogBody);
 		const target = form();
 		updateReviewRating(target);
@@ -50,6 +53,29 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 			dialog.showModal();
 		}
 		target.querySelector('input[name="date"]')?.focus({ preventScroll: true });
+	}
+
+	// L'ultimo episodio della stessa serie con "Dove" o "Con chi" compilati: voto e nota no, restano di ciascuno.
+	function episodePrefill(movieId, excludeId = null) {
+		const reference = (getData().viewings || [])
+			.filter(item => item.movieId === movieId && item.scope === 'episodes' && item.id !== excludeId && (item.place || item.withWhom))
+			.sort((first, second) => String(second.updatedAt || '').localeCompare(String(first.updatedAt || '')))[0];
+		return reference ? { date: reference.date, place: reference.place || '', withWhom: reference.withWhom || '' } : null;
+	}
+
+	// Una visione in sola lettura: data, dove, voto e note per intero. La matita passa al modulo, nella stessa finestra.
+	function openViewingRead(viewingId) {
+		const viewing = getData().viewings.find(item => item.id === viewingId);
+		if (!viewing) return;
+		dialogTitle.textContent = 'La visione';
+		dialogBody.innerHTML = viewRenderer.renderViewingSummary(viewing);
+		hydrateIcons(dialogBody);
+		initialSnapshot = '';
+		if (!dialog.open) {
+			scrollPosition = { left: window.scrollX, top: window.scrollY };
+			document.body.classList.add('modal-open');
+			dialog.showModal();
+		}
 	}
 
 	function syncClearRating(target) {
@@ -127,6 +153,8 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 	dialog.addEventListener('click', event => {
 		if (event.target === dialog) return; // il tocco fuori non chiude: si perderebbe quello che si sta scrivendo
 		const target = form();
+		const summaryEdit = event.target.closest('.viewing-summary-edit');
+		if (summaryEdit) return void openViewingForm({ viewingId: summaryEdit.dataset.viewingId });
 		if (event.target.closest('.viewing-cancel')) closeDialog();
 		else if (event.target.closest('.viewing-delete')) deleteViewing(target);
 		else if (event.target.closest('.viewing-clear-rating')) {
@@ -178,6 +206,8 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		}
 		const edit = event.target.closest('.viewing-edit');
 		if (edit) openViewingForm({ viewingId: edit.dataset.viewingId });
+		const read = event.target.closest('.viewing-read');
+		if (read) openViewingRead(read.dataset.viewingId);
 		const episode = event.target.closest('.diary-episode-edit');
 		if (episode) openOldEpisode(episode.dataset.movieId, episode.dataset.episode);
 	});
@@ -212,5 +242,5 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		});
 	}
 
-	return { getDiaryQuery: () => diaryQuery, getDiaryOpenGroups: () => openGroups, openViewingForm, updateDiaryRows, bind };
+	return { openViewingRead, getDiaryQuery: () => diaryQuery, getDiaryOpenGroups: () => openGroups, openViewingForm, updateDiaryRows, bind };
 }

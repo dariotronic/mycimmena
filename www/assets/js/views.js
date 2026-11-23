@@ -343,13 +343,18 @@ export function createViews(context) {
 		const label = viewingLabel({ scope: 'episodes', episodes: items.map(item => item.episode) }, movie.seasons);
 		const metas = [...new Set(viewings.map(viewingMeta).filter(Boolean))];
 		const key = `${date}|${movie.id}|${viewings[0].round || 1}`;
+		// Media delle spipe degli episodi che hanno un voto loro (arrotondata alla mezza spipa).
+		const rated = viewings.filter(viewing => (viewing.episodes || []).length === 1 && viewing.rating);
+		const average = rated.length ? Math.round((rated.reduce((sum, viewing) => sum + Number(viewing.rating), 0) / rated.length) * 2) / 2 : null;
 		return `
 			<details class="diary-episodes" data-diary-group="${escapeHtml(key)}"${getDiaryOpenGroups().has(key) ? ' open' : ''}>
 				<summary class="archive-film-row diary-row">
 					${moviePosterButton(movie, 'archive-film-poster')}
 					<div class="archive-film-copy">
-						<h3 class="archive-film-title">${escapeHtml(movieName(movie))} <span class="diary-label">· ${escapeHtml(label)}</span></h3>
+						<h3 class="archive-film-title">${escapeHtml(movieName(movie))}</h3>
+						<p class="diary-episodes-label">${escapeHtml(label)}</p>
 						<p class="diary-meta">${items.length} episodi${metas.length === 1 ? ` · ${escapeHtml(metas[0])}` : ''}</p>
+						${average ? `<div class="review-summary">${ratingSummary(average)}<span class="diary-average">media di ${rated.length === 1 ? '1 episodio' : `${rated.length} episodi`}</span></div>` : ''}
 					</div>
 					<div class="archive-film-actions">
 						<span class="diary-episodes-toggle" aria-hidden="true">${icon('expand_more')}</span>
@@ -377,7 +382,32 @@ export function createViews(context) {
 					<div class="review-summary">${ratingSummary(own ? viewing.rating : null)}</div>
 					${notes ? `<p class="review-content diary-notes">${escapeHtml(notes)}</p>` : ''}
 				</div>
-				<button ${edit} type="button" aria-label="Modifica ${escapeHtml(name)} di ${escapeHtml(movie.title)}" title="Modifica">${icon('edit')}</button>
+				<div class="diary-episode-actions">
+					${own ? readButton(viewing, `${name} di ${movie.title}`) : ''}
+					<button ${edit} type="button" aria-label="Modifica ${escapeHtml(name)} di ${escapeHtml(movie.title)}" title="Modifica">${icon('edit')}</button>
+				</div>
+			</article>
+		`;
+	}
+
+	// Apre la visione in sola lettura (diary.js): data, dove, voto e note per intero, con la matita per modificarla.
+	const readButton = (viewing, what) => `<button class="icon-button small viewing-read" data-viewing-id="${escapeHtml(viewing.id)}" type="button" aria-label="Leggi ${escapeHtml(what)}" title="Leggi">${icon('visibility')}</button>`;
+
+	function renderViewingSummary(viewing) {
+		const movie = viewing.movie;
+		const meta = viewingMeta(viewing);
+		const notes = sanitizeNotes(viewing.notes).html;
+		return `
+			<article class="viewing-summary">
+				<div class="viewing-summary-head">
+					<div>
+						<p class="viewing-form-title">${escapeHtml(movieName(movie))}${viewing.label ? ` <span class="diary-label">· ${escapeHtml(viewing.label)}</span>` : ''}</p>
+						<p class="viewing-summary-date">${escapeHtml(formatDate(viewing.date))}${meta ? ` · ${escapeHtml(meta)}` : ''}</p>
+					</div>
+					<button class="icon-button viewing-summary-edit" data-viewing-id="${escapeHtml(viewing.id)}" type="button" aria-label="Modifica questa visione" title="Modifica">${icon('edit')}</button>
+				</div>
+				<div class="review-summary">${ratingSummary(viewing.rating)}</div>
+				${notes ? `<div class="review-content viewing-summary-notes">${notes}</div>` : '<p class="help-text">Nessuna nota.</p>'}
 			</article>
 		`;
 	}
@@ -400,6 +430,7 @@ export function createViews(context) {
 				</div>
 				<div class="archive-film-actions">
 					${infoButton(movie)}
+					${readButton(viewing, `la visione di ${movie.title} del ${formatDate(viewing.date)}`)}
 					<button class="icon-button small viewing-edit" data-viewing-id="${escapeHtml(viewing.id)}" type="button" aria-label="Modifica la visione di ${escapeHtml(movie.title)} del ${escapeHtml(formatDate(viewing.date))}" title="Modifica">${icon('edit')}</button>
 				</div>
 			</article>
@@ -492,12 +523,15 @@ export function createViews(context) {
 	// `scope` e `season` per il voto a una stagione o a tutta la serie; una visione nuova propone "Dove" e "Con chi"
 	// dalle risposte dell'onboarding.
 	// `episode` ({ s, e }) con scope 'episodes': la visione di un episodio nuovo (dalla sezione Episodi della scheda).
-	function renderViewingForm({ movie, viewing = null, inWatchlist = false, scope = null, season = null, episode = null }) {
+	// `prefill` ({ date, place, withWhom }): per gli episodi, i dati dell'ultimo episodio della serie compilato a mano
+	// (diary.js); riempiono i campi vuoti, e la data solo per un episodio nuovo.
+	function renderViewingForm({ movie, viewing = null, inWatchlist = false, scope = null, season = null, episode = null, prefill = null }) {
 		const rating = viewing?.rating ? Number(viewing.rating) : 0;
 		const id = viewing ? escapeHtml(viewing.id) : 'new';
 		const kind = viewing?.scope || scope;
 		// Il voto a una stagione o alla serie non è una serata: niente "Dove" e "Con chi" proposti (per un episodio sì).
-		const defaults = viewing || (kind && kind !== 'episodes') ? {} : diaryDefaults(getData().profile);
+		const defaults = prefill || (viewing || (kind && kind !== 'episodes') ? {} : diaryDefaults(getData().profile));
+		const date = viewing?.date || prefill?.date || today();
 		const episodeName = episode ? viewingLabel({ scope: 'episodes', episodes: [episode] }, movie.seasons) : '';
 		const subtitle = viewing?.label || episodeName || (kind === 'season' ? `Stagione ${season}` : kind === 'series' ? 'Voto alla serie' : '');
 		return `
@@ -506,7 +540,7 @@ export function createViews(context) {
 				<div class="form-grid">
 					<div class="field">
 						<label for="viewing-date-${id}">Data</label>
-						<input id="viewing-date-${id}" name="date" type="date" required value="${escapeHtml(viewing?.date || today())}" max="${escapeHtml(today())}">
+						<input id="viewing-date-${id}" name="date" type="date" required value="${escapeHtml(date)}" max="${escapeHtml(today())}">
 					</div>
 					<div class="field">
 						<label for="viewing-place-${id}">Dove <span>(facoltativo)</span></label>
@@ -1053,5 +1087,5 @@ export function createViews(context) {
 		`;
 	}
 
-	return { minVotesLabel, renderInfo, renderWatching, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderMeetingForm, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
+	return { minVotesLabel, renderInfo, renderWatching, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderViewingSummary, renderMeetingForm, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
 }

@@ -897,7 +897,16 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .diary-episodes-toggle .material-icons-outlined { font-size: 26px; }
 .diary-episodes[open] .diary-episodes-toggle { transform: rotate(180deg); }
 .diary-episode-list { display: grid; gap: 8px; margin: 12px 0 0 88px; }
-.diary-episode { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.diary-episodes-label { margin: 4px 0 0; color: var(--rust); font-size: .9rem; font-weight: 700; }
+.diary-average { margin-left: 6px; color: var(--muted); font-size: .75rem; }
+.diary-episode-actions { display: flex; align-items: center; gap: 4px; }
+/* Una visione in sola lettura (occhio nel diario), con la matita per passare al modulo. */
+.viewing-summary { display: grid; gap: 14px; }
+.viewing-summary-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.viewing-summary-head .viewing-form-title { margin: 0; }
+.viewing-summary-date { margin: 6px 0 0; color: var(--muted); font-size: .9rem; }
+.viewing-summary-notes { margin-top: 0; }
+.diary-episode { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
 .diary-episode-title { margin: 0; font-weight: 700; font-size: .9rem; }
 .diary-episode .review-summary { margin-top: 4px; }
 @media (max-width: 640px) { .diary-episode-list { margin-left: 0; } }

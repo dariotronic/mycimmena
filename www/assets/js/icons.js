@@ -48,6 +48,7 @@ const iconMap = Object.freeze({
 	sort_year: 'sort_year',
 	settings: 'settings',
 	view_list: 'view_list',
+	visibility: 'visibility',
 	volume_off: 'volume_off',
 	volume_up: 'volume_up',
 	grid_view: 'grid_view'

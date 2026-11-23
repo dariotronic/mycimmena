@@ -200,7 +200,25 @@ test('groups the episodes of a series seen on the same day in one diary card tha
 	const html = makeViews(data).renderDiaryRows();
 	const groups = [...html.matchAll(/<details class="diary-episodes" data-diary-group="([^"]+)"/g)].map(match => match[1]);
 	assert.deepEqual(groups, ['2026-11-23|tt5753856|1'], 'un solo gruppo, il 23');
-	assert.match(html, /Dark \(2017\) <span class="diary-label">· S1·E1–E3<\/span>[\s\S]*3 episodi/);
+	// Gli episodi a capo sotto il titolo; la media delle spipe degli episodi votati (qui solo E3, 8).
+	assert.match(html, /Dark \(2017\)<\/h3>\s*<p class="diary-episodes-label">S1·E1–E3<\/p>\s*<p class="diary-meta">3 episodi/);
+	assert.match(html, /aria-label="8 spipe su 10"[\s\S]*<span class="diary-average">media di 1 episodio<\/span>/);
+	// Occhio per leggere la visione solo dove è di un episodio solo (e sulle righe dei film).
+	assert.match(html, /class="icon-button small viewing-read" data-viewing-id="e3"/);
+	assert.match(html, /class="icon-button small viewing-read" data-viewing-id="f"/);
+	assert.doesNotMatch(html, /viewing-read" data-viewing-id="old"/);
+	const views = makeViews(data);
+	const summary = views.renderViewingSummary({ ...data.viewings[0], label: 'S1·E3', place: 'Divano' });
+	assert.match(summary, /il 2026-11-23 · Divano/);
+	assert.match(summary, /<div class="review-content viewing-summary-notes"><p>Che finale<\/p><\/div>/);
+	assert.match(summary, /class="icon-button viewing-summary-edit" data-viewing-id="e3"/);
+	// Il modulo di un episodio nuovo prende data, dove e con chi da quello già compilato; voto e note no.
+	const form = views.renderViewingForm({ movie: dark, scope: 'episodes', episode: { s: 1, e: 5 }, prefill: { date: '2026-11-20', place: 'Divano', withWhom: 'gli amici' } });
+	assert.match(form, /name="date" type="date" required value="2026-11-20"/);
+	assert.match(form, /name="place" type="text" maxlength="120" value="Divano"/);
+	assert.match(form, /name="withWhom" type="text" maxlength="120" value="gli amici"/);
+	assert.match(form, /<input type="hidden" name="rating" value="">/);
+	assert.match(readFileSync(new URL('../www/assets/js/diary.js', import.meta.url), 'utf8'), /item\.scope === 'episodes' && item\.id !== excludeId && \(item\.place \|\| item\.withWhom\)/);
 	// Dentro: una card per episodio, in ordine; voto e nota solo per la visione di un episodio solo.
 	const cards = [...html.matchAll(/<p class="diary-episode-title">([^<]+)<\/p>/g)].map(match => match[1]);
 	assert.deepEqual(cards, ['S1·E1 «Segreti»', 'S1·E2 «Bugie»', 'S1·E3 «Passato e presente»']);
