@@ -52,7 +52,8 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 			document.body.classList.add('modal-open');
 			dialog.showModal();
 		}
-		target.querySelector('input[name="date"]')?.focus({ preventScroll: true });
+		dialog.classList.remove('reading');
+		scrollToFirstEmpty(target);
 	}
 
 	// L'ultimo episodio della stessa serie con "Dove" o "Con chi" compilati: voto e nota no, restano di ciascuno.
@@ -68,6 +69,7 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		const viewing = getData().viewings.find(item => item.id === viewingId);
 		if (!viewing) return;
 		dialogTitle.textContent = 'La visione';
+		dialog.classList.add('reading');
 		dialogBody.innerHTML = viewRenderer.renderViewingSummary(viewing);
 		hydrateIcons(dialogBody);
 		initialSnapshot = '';
@@ -76,6 +78,22 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 			document.body.classList.add('modal-open');
 			dialog.showModal();
 		}
+	}
+
+	// All'apertura del modulo: nessun campo col focus (niente tastiera), e la finestra scorre fino al primo campo
+	// ancora vuoto, che può essere anche il voto o le note.
+	function scrollToFirstEmpty(target) {
+		document.activeElement?.blur?.();
+		const fields = [
+			[target.querySelector('input[name="date"]'), element => !element.value],
+			[target.querySelector('input[name="place"]'), element => !element.value.trim()],
+			[target.querySelector('input[name="withWhom"]'), element => !element.value.trim()],
+			[target.querySelector('.review-rating'), () => !target.querySelector('input[name="rating"]').value],
+			[target.querySelector('.review-editor-wrap'), () => !reviewTextLength(target.querySelector('[data-review-editor]'))]
+		];
+		const empty = fields.find(([element, isEmpty]) => element && isEmpty(element))?.[0];
+		dialog.scrollTop = 0;
+		if (empty) window.requestAnimationFrame(() => empty.scrollIntoView({ block: 'center', behavior: 'instant' }));
 	}
 
 	function syncClearRating(target) {

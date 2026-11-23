@@ -399,12 +399,12 @@ export function createViews(context) {
 		const notes = sanitizeNotes(viewing.notes).html;
 		return `
 			<article class="viewing-summary">
+				<button class="icon-button viewing-summary-edit" data-viewing-id="${escapeHtml(viewing.id)}" type="button" aria-label="Modifica questa visione" title="Modifica">${icon('edit')}</button>
 				<div class="viewing-summary-head">
 					<div>
 						<p class="viewing-form-title">${escapeHtml(movieName(movie))}${viewing.label ? ` <span class="diary-label">· ${escapeHtml(viewing.label)}</span>` : ''}</p>
 						<p class="viewing-summary-date">${escapeHtml(formatDate(viewing.date))}${meta ? ` · ${escapeHtml(meta)}` : ''}</p>
 					</div>
-					<button class="icon-button viewing-summary-edit" data-viewing-id="${escapeHtml(viewing.id)}" type="button" aria-label="Modifica questa visione" title="Modifica">${icon('edit')}</button>
 				</div>
 				<div class="review-summary">${ratingSummary(viewing.rating)}</div>
 				${notes ? `<div class="review-content viewing-summary-notes">${notes}</div>` : '<p class="help-text">Nessuna nota.</p>'}
@@ -412,7 +412,9 @@ export function createViews(context) {
 		`;
 	}
 
-	const viewingMeta = viewing => [viewing.place, viewing.withWhom ? `con ${viewing.withWhom}` : ''].filter(Boolean).join(' · ');
+	// "Con chi" si legge dopo "con" ("con gli amici"), tranne "da solo/sola", che resta così.
+	const withWhomText = withWhom => (/^da sol[oaie]$/i.test(String(withWhom).trim()) ? String(withWhom).trim().replace(/^d/, 'D') : `con ${withWhom}`);
+	const viewingMeta = viewing => [viewing.place, viewing.withWhom ? withWhomText(viewing.withWhom) : ''].filter(Boolean).join(' · ');
 
 	function diaryRow(viewing) {
 		const movie = viewing.movie;
@@ -459,20 +461,7 @@ export function createViews(context) {
 			<h3 id="movie-info-viewings-title" class="movie-vote-title">I miei voti</h3>
 			${summary}
 			<ul class="my-viewings">
-				${list.map(viewing => {
-					const meta = viewingMeta(viewing);
-					const notes = sanitizeNotes(viewing.notes).text;
-					return `
-						<li>
-							<button class="my-viewing" type="button" data-viewing-id="${escapeHtml(viewing.id)}" aria-label="Modifica la visione del ${escapeHtml(formatDate(viewing.date))}">
-								<span class="my-viewing-date">${escapeHtml(formatDate(viewing.date))}</span>
-								<span class="review-summary">${ratingSummary(viewing.rating)}</span>
-								${meta ? `<span class="diary-meta">${escapeHtml(meta)}</span>` : ''}
-								${notes ? `<span class="my-viewing-notes">${escapeHtml(notes.length > 140 ? `${notes.slice(0, 140).trim()}…` : notes)}</span>` : ''}
-							</button>
-						</li>
-					`;
-				}).join('')}
+				${list.map(viewing => myViewingItem(viewing)).join('')}
 			</ul>
 		`;
 	}
@@ -482,13 +471,14 @@ export function createViews(context) {
 		const meta = viewingMeta(viewing);
 		const notes = sanitizeNotes(viewing.notes).text;
 		return `
-			<li>
+			<li class="my-viewing-item">
 				<button class="my-viewing" type="button" data-viewing-id="${escapeHtml(viewing.id)}" aria-label="Modifica la visione del ${escapeHtml(formatDate(viewing.date))}">
 					<span class="my-viewing-date">${escapeHtml(formatDate(viewing.date))}${prefix ? ` · ${escapeHtml(prefix)}` : ''}</span>
 					<span class="review-summary">${ratingSummary(viewing.rating)}</span>
 					${meta ? `<span class="diary-meta">${escapeHtml(meta)}</span>` : ''}
 					${notes ? `<span class="my-viewing-notes">${escapeHtml(notes.length > 140 ? `${notes.slice(0, 140).trim()}…` : notes)}</span>` : ''}
 				</button>
+				${readButton(viewing, `la visione del ${formatDate(viewing.date)}`)}
 			</li>
 		`;
 	}
@@ -570,8 +560,8 @@ export function createViews(context) {
 					</label>
 				` : ''}
 				<div class="button-row review-form-actions">
-					<button class="button" type="submit">Salva</button>
-					<button class="button secondary viewing-cancel" type="button">Annulla</button>
+					<button class="button icon-button-wide" type="submit" aria-label="Salva" title="Salva">${icon('save')}</button>
+					<button class="button secondary icon-button-wide viewing-cancel" type="button" aria-label="Annulla" title="Annulla">${icon('close')}</button>
 				</div>
 				${viewing ? deleteZone(viewing) : ''}
 			</form>

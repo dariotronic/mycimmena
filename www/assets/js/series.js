@@ -159,12 +159,13 @@ export function withOmdbSeason(seasons, n, titles, now = new Date().toISOString(
 export const missingOmdbSeasons = seasons => (seasons?.list || []).filter(season => season.source === 'omdb' && !season.titles).map(season => season.n);
 
 // Struttura scritta a mano (editor "La struttura non è giusta?"): `counts` è il numero di episodi di ogni stagione,
-// in ordine. Le stagioni di OMDb con lo stesso numero di episodi tengono i titoli; le altre diventano "inserite da te".
+// in ordine. Le stagioni di OMDb con lo stesso numero di episodi tengono i titoli, e quelle non ancora scaricate (0)
+// restano di OMDb, da scaricare quando si aprono; le altre diventano "inserite da te".
 export function customStructure(seasons, counts, now = new Date().toISOString()) {
 	const clean = counts.slice(0, MAX_SEASONS).map(value => Math.min(MAX_EPISODES, Math.max(0, Math.floor(Number(value) || 0))));
 	const list = clean.map((episodes, index) => {
 		const previous = seasonOf(seasons, index + 1);
-		if (previous?.source === 'omdb' && previous.titles && previous.episodes === episodes) return previous;
+		if (previous?.source === 'omdb' && (previous.titles ? previous.episodes === episodes : episodes === 0)) return previous;
 		return { n: index + 1, episodes, titles: null, source: 'custom' };
 	});
 	const sources = new Set(list.map(season => season.source));

@@ -108,7 +108,8 @@ body {
 }
 
 button, input, select { font: inherit; }
-button, a { -webkit-tap-highlight-color: transparent; }
+/* Niente evidenziazione azzurra al tocco, su qualsiasi elemento (anche summary, label, card…). */
+*, *::before, *::after { -webkit-tap-highlight-color: transparent; }
 button { color: inherit; }
 a { color: inherit; }
 a, button { text-decoration: none; }
@@ -226,8 +227,9 @@ body.modal-open { overflow: hidden; }
 .page-heading h1 { margin: 0; font-family: Spectral, serif; font-size: clamp(2.6rem, 6vw, 4.6rem); font-weight: 400; line-height: 1; }
 .page-heading p { margin: 8px 0 0; color: var(--muted); font-size: .86rem; }
 /* Pulsanti a icona di fianco al titolo (Home: condividi e calendario; Diario: statistiche). */
-.page-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; }
-.page-heading-actions { display: flex; align-items: center; gap: 8px; }
+.page-title-row { display: flex; align-items: center; justify-content: space-between; gap: 6px 14px; }
+.page-heading-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.page-heading > div:first-child { flex: 1; min-width: 0; }
 .page-heading-actions .icon-button { width: 40px; height: 40px; }
 .section-title { margin: 0 0 18px; font-family: Spectral, serif; font-size: 1.7rem; font-weight: 400; }
 .empty-state { width: 100%; padding: 34px 28px; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius-lg); background: var(--surface); }
@@ -314,6 +316,9 @@ body.modal-open { overflow: hidden; }
 .settings-panel { display: grid; width: 100%; gap: 20px; padding: clamp(18px, 4vw, 24px); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-sm); }
 .settings-panel > p:first-child { margin-top: 0; line-height: 1.6; }
 .settings-panel .status-message { grid-column: 1 / -1; margin-bottom: 0; }
+.settings-panel .button-row { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; }
+.settings-panel .button { width: 100%; justify-content: center; }
+.settings-panel .profile-setting-row > div:first-child { flex: 1; min-width: 0; }
 .profile-setting-row { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
 .profile-setting-row > div { min-width: 0; }
 .profile-setting-row .field-label { margin: 0 0 5px; color: var(--muted); font-size: .68rem; font-weight: 700; text-transform: uppercase; }
@@ -349,7 +354,7 @@ body.modal-open { overflow: hidden; }
 .scheduled-marker { display: inline-flex; align-items: center; margin-left: 10px; padding: 3px 9px; border-radius: 999px; background: var(--accent-wash-strong); color: var(--rust); font-size: .6rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .archive-entry { padding: 24px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-sm); transition: transform .2s ease, box-shadow .2s ease; }
 .archive-entry:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-.archive-date { margin: 0; font-family: Spectral, serif; font-size: 1.9rem; font-weight: 600; line-height: 1.1; }
+.archive-date { margin: 0 0 18px; font-family: Spectral, serif; font-size: 1.9rem; font-weight: 600; line-height: 1.1; }
 .archive-place { display: inline-flex; align-items: center; margin: 8px 0 18px; padding: 4px 10px; border-radius: 999px; background: var(--rust-wash); color: var(--muted); font-size: .8rem; font-weight: 600; line-height: 1.4; }
 .archive-films { display: grid; gap: 14px; }
 .archive-film-row { position: relative; display: grid; grid-template-columns: 72px minmax(0, 1fr) 30px; align-items: center; gap: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
@@ -450,6 +455,9 @@ body.modal-open { overflow: hidden; }
 .review-character-count { margin: 0; color: var(--muted); font-size: .7rem; text-align: right; }
 .review-character-count.error { color: var(--error-color); }
 .review-form-actions { gap: 8px; }
+/* Salva e Annulla del modulo della visione: pulsanti con la sola icona. */
+.button.icon-button-wide { min-width: 96px; padding-inline: 24px; }
+.button.icon-button-wide .material-icons-outlined { font-size: 22px; }
 .list-search-area, #watchlist-section { width: 100%; }
 .search-bar { display: flex; width: 100%; max-width: none; gap: 10px; }
 .search-input-wrap { position: relative; flex: 1; min-width: 0; }
@@ -796,7 +804,7 @@ body.modal-open { overflow: hidden; }
   .home-movie-poster { width: 68px; min-height: 98px; }
   .home-film-copy .display-title { font-size: clamp(2rem, 9vw, 3.2rem); }
   .home-details { grid-template-columns: 1fr; gap: 14px; margin-bottom: 24px; padding: 14px 16px; }
-  .page-heading { align-items: start; flex-direction: column; margin-bottom: 28px; }
+  .page-heading { align-items: stretch; flex-direction: column; margin-bottom: 28px; }
   .form-grid { grid-template-columns: 1fr; }
   .calendar-form { gap: 18px; }
   .field.full { grid-column: auto; }
@@ -899,9 +907,12 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .diary-episode-list { display: grid; gap: 8px; margin: 12px 0 0 88px; }
 .diary-episodes-label { margin: 4px 0 0; color: var(--rust); font-size: .9rem; font-weight: 700; }
 .diary-average { flex-basis: 100%; margin-top: 2px; color: var(--muted); font-size: .75rem; }
-.diary-episode-actions { display: flex; align-items: center; gap: 4px; }
+.diary-episode-actions { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 /* Una visione in sola lettura (occhio nel diario), con la matita per passare al modulo. */
 .viewing-summary { display: grid; gap: 14px; }
+/* La matita della sola lettura sta in alto, a sinistra della croce che chiude (42 px + 8 di spazio). */
+.viewing-summary-edit { position: absolute; top: 14px; right: 64px; z-index: 1; }
+.viewing-dialog.reading .reviews-dialog-content > .section-title { margin-right: 96px; }
 .viewing-summary-head { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
 .viewing-summary-head .viewing-form-title { margin: 0; }
 .viewing-summary-date { margin: 6px 0 0; color: var(--muted); font-size: .9rem; }
@@ -928,6 +939,8 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .movie-info-viewings[hidden] { display: none; }
 .my-viewings-average { margin: 0; color: var(--muted); font-size: .85rem; font-weight: 600; }
 .my-viewings { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.my-viewing-item { display: flex; align-items: center; gap: 8px; }
+.my-viewing-item .viewing-read { flex: none; }
 .my-viewing { display: grid; gap: 4px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .my-viewing:hover, .my-viewing:focus-visible { border-color: var(--accent-border); background: var(--accent-wash); outline: none; }
 .my-viewing-date { font-size: .8rem; font-weight: 700; }
@@ -1053,6 +1066,7 @@ html[data-onboarding="true"] .site-shell { flex: none; min-height: 0; margin: 0;
 .series-season-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 12px 12px; font-size: .8rem; }
 .series-season-actions input { min-height: 34px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: inherit; }
 .series-hint { margin: 0; font-size: .75rem; }
+.series-structure-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; }
 .series-quick-structure { display: grid; gap: 12px; }
 .series-quick-structure .help-text { margin: 0; }
 .series-votes { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: .85rem; }
@@ -1061,6 +1075,11 @@ html[data-onboarding="true"] .site-shell { flex: none; min-height: 0; margin: 0;
 .diary-label { color: var(--muted); font-family: Montserrat, sans-serif; font-size: .8em; font-weight: 600; }
 .watching { display: grid; gap: 4px; margin: 0 0 24px; }
 .watching .section-title { margin-bottom: 6px; font-size: 1.35rem; }
+/* "Stai guardando": il prossimo episodio in evidenza. */
+.watching-next { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin: 6px 0 2px; }
+.watching-next-label { color: var(--muted); font-size: .65rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.watching-next strong { color: var(--rust); font-size: 1.05rem; font-weight: 800; }
+.watching-next-title { flex-basis: 100%; font-family: Spectral, serif; font-size: 1rem; }
 .watching-row { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
 .watching-row:first-of-type { border-top: 0; }
 .watching-copy .movie-year { margin: 4px 0 0; }

@@ -10,6 +10,10 @@ import {
 
 const LONG_PRESS_MS = 550;
 
+// Stagioni aperte nella scheda, per serie: la sezione si ridisegna a ogni salvataggio o quando arrivano gli episodi da
+// OMDb, e senza questo si chiuderebbe la stagione appena aperta. Senza nessuna scelta si apre quella in corso.
+const openSeasons = new Map();
+
 const episodeLabel = (seasons, episode) => {
 	const title = episodeTitle(seasons, episode);
 	return title ? `${formatEpisode(episode)} «${title}»` : formatEpisode(episode);
@@ -65,7 +69,7 @@ export function renderSeriesSection(movie, info, { mode }) {
 			</div>`
 			: '<p class="help-text" role="status">Caricamento degli episodi…</p>';
 		return `
-			<details class="series-season" data-season="${season.n}"${season.n === current ? ' open' : ''}>
+			<details class="series-season" data-season="${season.n}"${(openSeasons.get(movie.id)?.has(season.n) ?? season.n === current) ? ' open' : ''}>
 				<summary><span>Stagione ${season.n}</span>${custom}<span class="series-season-count">${seen}/${season.episodes || '?'}</span></summary>
 				${episodes}
 			</details>
@@ -78,21 +82,28 @@ export function renderSeriesSection(movie, info, { mode }) {
 		${main}
 		<div class="series-seasons">${seasonBlocks}</div>
 		<p class="series-hint help-text">Tocca un episodio per segnarlo o aprirlo nel diario (data, voto, note); tienilo premuto per segnare come visti oggi anche tutti quelli prima.</p>
-		<button class="text-button" type="button" data-series-structure>La struttura non è giusta?</button>
+		<div class="series-structure-links">
+			<button class="text-button" type="button" data-series-add-season>Aggiungi una stagione</button>
+			<button class="text-button" type="button" data-series-structure>La struttura non è giusta?</button>
+		</div>
 	`;
 }
 
 // Riga di "Stai guardando" (Home e Watchlist).
 export function renderWatchingRow(item, { poster }) {
 	const { movie, next, remaining, status, seasons } = item;
+	// Il prossimo episodio in evidenza (etichetta e titolo), sotto quanti ne mancano.
+	const upNext = next && status !== 'paused';
 	const meta = status === 'paused'
-		? 'In pausa'
-		: next ? `${episodeLabel(seasons, next)} · ${remainingText(remaining)}` : seasons ? 'Tutti gli episodi visti' : 'Struttura da indicare';
+		? `In pausa${next ? ` · prossimo ${formatEpisode(next)}` : ''}`
+		: next ? remainingText(remaining) : seasons ? 'Tutti gli episodi visti' : 'Struttura da indicare';
+	const nextTitle = upNext ? episodeTitle(seasons, next) : '';
 	return `
 		<article class="watching-row">
 			<button class="movie-poster-trigger" data-movie-id="${escapeHtml(movie.id)}" type="button" aria-label="Apri i dettagli di ${escapeHtml(movie.title)}">${poster(movie, 'archive-film-poster')}</button>
 			<div class="watching-copy">
 				<h3 class="archive-film-title">${escapeHtml(movieName(movie))}</h3>
+				${upNext ? `<p class="watching-next"><span class="watching-next-label">Prossimo</span><strong>${escapeHtml(formatEpisode(next))}</strong>${nextTitle ? `<span class="watching-next-title">«${escapeHtml(nextTitle)}»</span>` : ''}</p>` : ''}
 				<p class="movie-year">${escapeHtml(meta)}</p>
 			</div>
 			${next && status !== 'paused'
@@ -213,6 +224,8 @@ export function createSeriesUi({ app, store, details, getData, getState, refresh
 			return;
 		}
 		if (event.target.closest('[data-series-structure]')) openStructureEditor(movieId);
+		// OMDb può essere indietro con le stagioni nuove: se ne aggiunge una a mano, nell'editor.
+		if (event.target.closest('[data-series-add-season]')) openStructureEditor(movieId, { addSeason: true });
 	}
 
 	function handlePointerDown(event) {
@@ -235,7 +248,10 @@ export function createSeriesUi({ app, store, details, getData, getState, refresh
 	function handleToggle(event) {
 		const season = event.target.closest?.('details[data-season]');
 		const target = season && seriesTarget(event);
-		if (!target || !season.open) return;
+		if (!target) return;
+		if (!openSeasons.has(target.movieId)) openSeasons.set(target.movieId, new Set());
+		openSeasons.get(target.movieId)[season.open ? 'add' : 'delete'](Number(season.dataset.season));
+		if (!season.open) return;
 		const info = getData().seriesOf(target.movieId);
 		const n = Number(season.dataset.season);
 		if (info.seasons?.list.find(item => item.n === n && item.source === 'omdb' && !item.titles)) details.ensureSeasons(target.movieId, [n]);
@@ -273,11 +289,20 @@ export function createSeriesUi({ app, store, details, getData, getState, refresh
 		`;
 	}
 
-	function openStructureEditor(movieId) {
+	// `addSeason`: si apre con una stagione in più in fondo, già pronta da compilare.
+	function openStructureEditor(movieId, { addSeason = false } = {}) {
 		structureMovieId = movieId;
 		structureBody.innerHTML = renderStructureForm(movieId);
 		hydrateIcons(structureBody);
 		structureDialog.showModal();
+		if (!addSeason) return;
+		const form = structureBody.querySelector('[data-structure-form]');
+		const count = form.querySelector('[data-structure-count]');
+		const hasSeasons = Boolean(getData().seriesOf(movieId).seasons?.list?.length);
+		if (hasSeasons) count.value = String(Math.min(MAX_SEASONS, Number(count.value) + 1));
+		syncStructureRows(form);
+		const rows = form.querySelectorAll('[data-structure-row]');
+		rows[rows.length - 1]?.scrollIntoView({ block: 'center', behavior: 'instant' });
 	}
 
 	function syncStructureRows(form) {

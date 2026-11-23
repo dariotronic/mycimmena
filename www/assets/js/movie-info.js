@@ -56,7 +56,7 @@ export function posterButton(movie, className, extraClass = '') {
 // la watchlist si riordina e rifiltra. `renderMyViewings` disegna "I miei voti" e `openViewing` apre il diario.
 // `renderSeries` disegna la sezione Episodi delle serie (series-ui.js); `onShow` gira a ogni apertura (dettagli OMDb, stagioni).
 // `scheduleMovie` aggiunge il titolo alla prossima serata (il pulsante sta sotto l'Hypometro).
-export function createMovieInfo({ app, openImageLightbox, getData = () => ({ movies: [] }), saveHype, renderMyViewings = () => '', renderSeries = () => '', onShow = () => {}, openViewing = () => {}, onVotesChanged = () => {}, scheduleMovie = async () => {} }) {
+export function createMovieInfo({ app, openImageLightbox, getData = () => ({ movies: [] }), saveHype, renderMyViewings = () => '', renderSeries = () => '', onShow = () => {}, openViewing = () => {}, onVotesChanged = () => {}, scheduleMovie = async () => {}, openViewingRead = () => {} }) {
 	const movieInfoDialog = document.getElementById('movie-info-dialog');
 	const movieInfoClose = document.getElementById('movie-info-close');
 	const movieInfoPoster = document.getElementById('movie-info-poster');
@@ -132,6 +132,9 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 	// "Segna come visto" e le visioni di "I miei voti" aprono il diario: la scheda si chiude prima, per non avere
 	// due finestre una sopra l'altra.
 	movieInfoViewings.addEventListener('click', event => {
+		// L'occhio apre la visione in sola lettura sopra la scheda, che resta aperta sotto.
+		const read = event.target.closest('.viewing-read');
+		if (read) return void openViewingRead(read.dataset.viewingId);
 		const mark = event.target.closest('.mark-seen');
 		const viewing = event.target.closest('.my-viewing');
 		if (!mark && !viewing) return;

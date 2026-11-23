@@ -87,7 +87,9 @@ test('lists series in progress under "Stai guardando" with a quick button for th
 	const data = buildAppData(state);
 	assert.equal(data.watching.length, 1);
 	const row = renderWatchingRow(data.watching[0], { poster });
-	assert.match(row, /S1·E3 «Tre» · 3 episodi rimasti/);
+	// Il prossimo episodio in evidenza, con il titolo; sotto quanti ne mancano.
+	assert.match(row, /<p class="watching-next"><span class="watching-next-label">Prossimo<\/span><strong>S1·E3<\/strong><span class="watching-next-title">«Tre»<\/span><\/p>/);
+	assert.match(row, /<p class="movie-year">3 episodi rimasti<\/p>/);
 	assert.match(row, /aria-label="Segna S1·E3 di Severance come visto"/);
 	const paused = renderWatchingRow({ ...data.watching[0], status: 'paused' }, { poster });
 	assert.match(paused, /In pausa/);

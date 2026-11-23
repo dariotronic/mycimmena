@@ -183,3 +183,12 @@ test('saves profile, settings, onboarding, OMDb details and the season structure
 	assert.equal(state.movies.get(severance.id).seasons.list[0].episodes, 9);
 	assert.equal(await store.saveDetails('tt999', {}), null);
 });
+
+test('keeps the OMDb seasons not yet downloaded when a season is added by hand', () => {
+	// OMDb dice 3 stagioni; scaricata solo la prima (2 episodi). Si aggiunge la quarta, uscita da poco.
+	const omdb = withOmdbSeason(structureFromOmdb(3, {}, NOW), 1, ['Uno', 'Due'], NOW);
+	const edited = customStructure(omdb, [2, 0, 0, 8], NOW);
+	assert.deepEqual(edited.list.map(season => [season.n, season.episodes, season.source]), [[1, 2, 'omdb'], [2, 0, 'omdb'], [3, 0, 'omdb'], [4, 8, 'custom']]);
+	assert.deepEqual(missingOmdbSeasons(edited), [2, 3], 'le stagioni 2 e 3 si scaricano ancora da OMDb');
+	assert.equal(edited.source, 'mixed');
+});

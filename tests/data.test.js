@@ -111,7 +111,9 @@ test('shows "I miei voti" on the movie card with every viewing and the average',
 	const html = views.renderMyViewings(thing);
 	assert.match(html, /I miei voti/);
 	assert.match(html, /Media 9 spipe su 10 · 3 visioni/);
-	assert.deepEqual([...html.matchAll(/data-viewing-id="([^"]+)"/g)].map(match => match[1]), ['c', 'b', 'a']);
+	assert.deepEqual([...html.matchAll(/class="my-viewing" type="button" data-viewing-id="([^"]+)"/g)].map(match => match[1]), ['c', 'b', 'a']);
+	// Accanto a ogni visione l'occhio per leggerla.
+	assert.deepEqual([...html.matchAll(/viewing-read" data-viewing-id="([^"]+)"/g)].map(match => match[1]), ['c', 'b', 'a']);
 	// "Segna come visto" sta sotto l'Hypometro (movie-info.js), non qui: senza visioni la sezione è vuota.
 	assert.doesNotMatch(html, /mark-seen/);
 	assert.equal(views.renderMyViewings(data.movies[0]), '');
@@ -229,4 +231,19 @@ test('groups the episodes of a series seen on the same day in one diary card tha
 	assert.match(html, /viewing-edit" data-viewing-id="f"/);
 	assert.match(html, /viewing-edit" data-viewing-id="e4"/);
 	assert.equal((html.match(/class="diary-episode"/g) || []).length, 3);
+});
+
+test('writes "Da solo" without "con" in the diary', () => {
+	const movie = { id: 'tt1', title: 'Alien', year: '1979' };
+	const data = { movies: [], viewings: [
+		{ id: 'a', movieId: 'tt1', date: '2026-11-23', place: 'Casa', withWhom: 'da solo', movie, notes: '', rating: null },
+		{ id: 'b', movieId: 'tt1', date: '2026-11-22', place: null, withWhom: 'Anna', movie, notes: '', rating: null }
+	] };
+	const html = makeViews(data).renderDiaryRows();
+	assert.match(html, /<p class="diary-meta">Casa · Da solo<\/p>/);
+	assert.match(html, /<p class="diary-meta">con Anna<\/p>/);
+	// Il modulo della visione: Salva e Annulla sono pulsanti con l'icona.
+	const form = makeViews(data).renderViewingForm({ movie, viewing: data.viewings[0] });
+	assert.match(form, /<button class="button icon-button-wide" type="submit" aria-label="Salva" title="Salva">/);
+	assert.match(form, /<button class="button secondary icon-button-wide viewing-cancel" type="button" aria-label="Annulla" title="Annulla">/);
 });

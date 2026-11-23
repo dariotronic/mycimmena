@@ -81,6 +81,7 @@ const { infoButton, titleWithInfo, refreshMovieInfo } = createMovieInfo({
 		if (movie.type === 'series' && data.movieById(movie.id)) details.ensureSeasons(movie.id, [1, data.seriesOf(movie.id).next?.s || 1]);
 	},
 	openViewing: target => diary.openViewingForm(target),
+	openViewingRead: viewingId => diary.openViewingRead(viewingId),
 	onVotesChanged: () => watchlist.updateWatchlistRows(),
 	scheduleMovie: movieId => meetingActions.scheduleMovie(movieId)
 });
