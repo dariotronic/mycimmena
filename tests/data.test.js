@@ -181,3 +181,34 @@ test('wires the diary, search, posters and evening to the local store', () => {
 	assert.match(index, /<section id="movie-info-viewings"/);
 	assert.doesNotMatch(index, /reviews-dialog-body|id="reviews-dialog"/);
 });
+
+test('groups the episodes of a series seen on the same day in one diary card that opens into one card per episode', () => {
+	const dark = { id: 'tt5753856', title: 'Dark', year: '2017', type: 'series', seasons: { list: [{ n: 1, episodes: 10, titles: ['Segreti', 'Bugie', 'Passato e presente'] }] } };
+	const film = { id: 'tt1', title: 'Alien', year: '1979' };
+	const episode = (id, date, list, extra = {}) => ({ id, movieId: dark.id, date, scope: 'episodes', episodes: list, round: 1, movie: dark, notes: '', rating: null, ...extra });
+	const data = {
+		movies: [],
+		viewings: [
+			// Il 23: E3 visione sua (con voto e nota), E1–E2 insieme come nelle versioni fino alla 0.5, e un film.
+			episode('e3', '2026-11-23', [{ s: 1, e: 3 }], { rating: 8, notes: '<p>Che finale</p>' }),
+			{ id: 'f', movieId: film.id, date: '2026-11-23', movie: film, notes: '', rating: null },
+			episode('old', '2026-11-23', [{ s: 1, e: 1 }, { s: 1, e: 2 }]),
+			// Il 22: un episodio solo resta una card normale.
+			episode('e4', '2026-11-22', [{ s: 1, e: 4 }])
+		]
+	};
+	const html = makeViews(data).renderDiaryRows();
+	const groups = [...html.matchAll(/<details class="diary-episodes" data-diary-group="([^"]+)"/g)].map(match => match[1]);
+	assert.deepEqual(groups, ['2026-11-23|tt5753856|1'], 'un solo gruppo, il 23');
+	assert.match(html, /Dark \(2017\) <span class="diary-label">· S1·E1–E3<\/span>[\s\S]*3 episodi/);
+	// Dentro: una card per episodio, in ordine; voto e nota solo per la visione di un episodio solo.
+	const cards = [...html.matchAll(/<p class="diary-episode-title">([^<]+)<\/p>/g)].map(match => match[1]);
+	assert.deepEqual(cards, ['S1·E1 «Segreti»', 'S1·E2 «Bugie»', 'S1·E3 «Passato e presente»']);
+	assert.match(html, /class="icon-button small diary-episode-edit" data-movie-id="tt5753856" data-episode="1-2"/);
+	assert.match(html, /class="icon-button small viewing-edit" data-viewing-id="e3"/);
+	assert.match(html, /Che finale/);
+	// Il film dello stesso giorno e l'episodio da solo del 22 restano card normali.
+	assert.match(html, /viewing-edit" data-viewing-id="f"/);
+	assert.match(html, /viewing-edit" data-viewing-id="e4"/);
+	assert.equal((html.match(/class="diary-episode"/g) || []).length, 3);
+});

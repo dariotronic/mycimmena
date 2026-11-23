@@ -89,6 +89,7 @@ const { infoButton, titleWithInfo, refreshMovieInfo } = createMovieInfo({
 const viewRenderer = createViews({
 	getColorMode: () => document.documentElement.dataset.theme,
 	getDiaryQuery: () => diary.getDiaryQuery(),
+	getDiaryOpenGroups: () => diary.getDiaryOpenGroups(),
 	getData,
 	getMovieSearchMode: () => search.getMovieSearchMode(),
 	getMovieSort: () => watchlist.getMovieSort(),

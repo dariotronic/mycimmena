@@ -888,6 +888,19 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .home-summary-row .movie-year { margin: 4px 0 0; }
 .diary-meta { margin: 4px 0 0; color: var(--muted); font-size: .8rem; }
 .diary-row .review-summary { margin-top: 6px; }
+/* Episodi di una serie nello stesso giorno: una card con la freccia, che apre una card per episodio. */
+.archive-films > .diary-episodes { padding-top: 14px; border-top: 1px solid var(--line); }
+.archive-films > .diary-episodes:first-child { padding-top: 0; border-top: 0; }
+.diary-episodes > summary { padding-top: 0; border-top: 0; cursor: pointer; list-style: none; }
+.diary-episodes > summary::-webkit-details-marker { display: none; }
+.diary-episodes-toggle { display: grid; place-items: center; width: 30px; height: 30px; color: var(--rust); transition: transform .2s ease; }
+.diary-episodes-toggle .material-icons-outlined { font-size: 26px; }
+.diary-episodes[open] .diary-episodes-toggle { transform: rotate(180deg); }
+.diary-episode-list { display: grid; gap: 8px; margin: 12px 0 0 88px; }
+.diary-episode { display: grid; grid-template-columns: minmax(0, 1fr) 30px; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.diary-episode-title { margin: 0; font-weight: 700; font-size: .9rem; }
+.diary-episode .review-summary { margin-top: 4px; }
+@media (max-width: 640px) { .diary-episode-list { margin-left: 0; } }
 /* Nel diario della nota si vede solo l'inizio, su una riga: il resto si legge aprendo la visione. */
 .diary-notes { margin: 6px 0 0; overflow: hidden; color: var(--muted); font-size: .95rem; line-height: 1.55; text-overflow: ellipsis; white-space: nowrap; }
 .viewing-form { padding-top: 0; border-top: 0; }

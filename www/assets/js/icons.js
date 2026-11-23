@@ -16,6 +16,7 @@ const iconMap = Object.freeze({
 	event: 'event',
 	event_available: 'event_available',
 	event_busy: 'event_busy',
+	expand_more: 'expand_more',
 	filter_list: 'filter_list',
 	format_bold: 'format_bold',
 	format_italic: 'format_italic',

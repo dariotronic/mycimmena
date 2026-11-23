@@ -30,6 +30,8 @@ export function createViews(context) {
 	const {
 		getData,
 		getDiaryQuery = () => '',
+		// Gruppi di episodi aperti nel diario (date|serie|giro), per tenerli aperti quando la lista si ridisegna.
+		getDiaryOpenGroups = () => new Set(),
 		getColorMode = () => 'day',
 		getMovieSearchMode,
 		getMovieSort,
@@ -308,9 +310,76 @@ export function createViews(context) {
 		return days.map(day => `
 			<article class="archive-entry">
 				<h2 class="archive-date"><time datetime="${escapeHtml(day.date)}">${escapeHtml(formatDate(day.date))}</time></h2>
-				<div class="archive-films">${day.items.map(diaryRow).join('')}</div>
+				<div class="archive-films">${groupEpisodes(day.items).map(entry => (Array.isArray(entry) ? episodeGroupRow(day.date, entry) : diaryRow(entry))).join('')}</div>
 			</article>
 		`).join('');
+	}
+
+	// Nello stesso giorno gli episodi di una serie (stesso giro) stanno in un gruppo, al posto della prima visione;
+	// un episodio solo resta una card normale. Il resto non cambia ordine.
+	function groupEpisodes(items) {
+		const groups = new Map();
+		const entries = [];
+		for (const viewing of items) {
+			if (viewing.scope !== 'episodes') {
+				entries.push(viewing);
+				continue;
+			}
+			const key = `${viewing.movieId}|${viewing.round || 1}`;
+			if (!groups.has(key)) {
+				groups.set(key, []);
+				entries.push(groups.get(key));
+			}
+			groups.get(key).push(viewing);
+		}
+		return entries.map(entry => (Array.isArray(entry) && entry.length === 1 && (entry[0].episodes || []).length <= 1 ? entry[0] : entry));
+	}
+
+	// Card del gruppo di episodi: la freccia apre l'elenco, con una card per episodio (voto, nota, matita).
+	function episodeGroupRow(date, viewings) {
+		const movie = viewings[0].movie;
+		const items = viewings.flatMap(viewing => (viewing.episodes || []).map(episode => ({ viewing, episode })))
+			.sort((first, second) => first.episode.s - second.episode.s || first.episode.e - second.episode.e);
+		const label = viewingLabel({ scope: 'episodes', episodes: items.map(item => item.episode) }, movie.seasons);
+		const metas = [...new Set(viewings.map(viewingMeta).filter(Boolean))];
+		const key = `${date}|${movie.id}|${viewings[0].round || 1}`;
+		return `
+			<details class="diary-episodes" data-diary-group="${escapeHtml(key)}"${getDiaryOpenGroups().has(key) ? ' open' : ''}>
+				<summary class="archive-film-row diary-row">
+					${moviePosterButton(movie, 'archive-film-poster')}
+					<div class="archive-film-copy">
+						<h3 class="archive-film-title">${escapeHtml(movieName(movie))} <span class="diary-label">· ${escapeHtml(label)}</span></h3>
+						<p class="diary-meta">${items.length} episodi${metas.length === 1 ? ` · ${escapeHtml(metas[0])}` : ''}</p>
+					</div>
+					<div class="archive-film-actions">
+						<span class="diary-episodes-toggle" aria-hidden="true">${icon('expand_more')}</span>
+						<span class="visually-hidden">Mostra o nascondi gli episodi</span>
+					</div>
+				</summary>
+				<div class="diary-episode-list">${items.map(({ viewing, episode }) => episodeCard(viewing, episode, movie)).join('')}</div>
+			</details>
+		`;
+	}
+
+	// Un episodio del gruppo. Voto e nota sono suoi solo se la visione è di quell'episodio soltanto: quelle di più
+	// episodi insieme (fino alla 0.5) si separano quando si tocca la matita (diary.js, store.splitEpisode).
+	function episodeCard(viewing, episode, movie) {
+		const own = (viewing.episodes || []).length === 1;
+		const name = viewingLabel({ scope: 'episodes', episodes: [episode] }, movie.seasons);
+		const notes = own ? sanitizeNotes(viewing.notes).text.replace(/\s+/g, ' ').trim() : '';
+		const edit = own
+			? `class="icon-button small viewing-edit" data-viewing-id="${escapeHtml(viewing.id)}"`
+			: `class="icon-button small diary-episode-edit" data-movie-id="${escapeHtml(movie.id)}" data-episode="${episode.s}-${episode.e}"`;
+		return `
+			<article class="diary-episode">
+				<div class="diary-episode-copy">
+					<p class="diary-episode-title">${escapeHtml(name)}</p>
+					<div class="review-summary">${ratingSummary(own ? viewing.rating : null)}</div>
+					${notes ? `<p class="review-content diary-notes">${escapeHtml(notes)}</p>` : ''}
+				</div>
+				<button ${edit} type="button" aria-label="Modifica ${escapeHtml(name)} di ${escapeHtml(movie.title)}" title="Modifica">${icon('edit')}</button>
+			</article>
+		`;
 	}
 
 	const viewingMeta = viewing => [viewing.place, viewing.withWhom ? `con ${viewing.withWhom}` : ''].filter(Boolean).join(' · ');

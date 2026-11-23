@@ -13,6 +13,8 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 	const dialogBody = document.getElementById('viewing-dialog-body');
 	const dialogClose = document.getElementById('viewing-dialog-close');
 	let diaryQuery = '';
+	// Gruppi di episodi aperti (views.js, episodeGroupRow): restano aperti quando la lista si ridisegna.
+	const openGroups = new Set();
 	let initialSnapshot = '';
 	let scrollPosition = null;
 
@@ -176,7 +178,31 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		}
 		const edit = event.target.closest('.viewing-edit');
 		if (edit) openViewingForm({ viewingId: edit.dataset.viewingId });
+		const episode = event.target.closest('.diary-episode-edit');
+		if (episode) openOldEpisode(episode.dataset.movieId, episode.dataset.episode);
 	});
+	// Il tocco sulla locandina dentro l'intestazione del gruppo apre la scheda, senza aprire o chiudere il gruppo.
+	app.addEventListener('click', event => {
+		if (event.target.closest('.diary-episodes > summary .movie-poster-trigger')) event.preventDefault();
+	});
+	app.addEventListener('toggle', event => {
+		const group = event.target.closest?.('[data-diary-group]');
+		if (!group) return;
+		if (group.open) openGroups.add(group.dataset.diaryGroup);
+		else openGroups.delete(group.dataset.diaryGroup);
+	}, true);
+
+	// Episodio dentro una visione di più episodi (fino alla 0.5): diventa una visione sua, poi si apre.
+	async function openOldEpisode(movieId, key) {
+		const [s, e] = String(key).split('-').map(Number);
+		try {
+			const viewingId = await store.splitEpisode(movieId, { s, e });
+			await refresh();
+			if (viewingId) openViewingForm({ viewingId });
+		} catch (error) {
+			showErrorToast(error);
+		}
+	}
 
 	function bind() {
 		document.getElementById('diary-search-form')?.addEventListener('submit', event => event.preventDefault());
@@ -186,5 +212,5 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		});
 	}
 
-	return { getDiaryQuery: () => diaryQuery, openViewingForm, updateDiaryRows, bind };
+	return { getDiaryQuery: () => diaryQuery, getDiaryOpenGroups: () => openGroups, openViewingForm, updateDiaryRows, bind };
 }
