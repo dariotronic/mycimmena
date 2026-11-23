@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 import { readVersions } from './version.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+// Impronta SHA-256 del certificato di firma delle release (pubblica: la mostra qualunque APK di myCimmena).
+const EXPECTED_CERT = 'ad2a03a1d2338cbf6e694a226625f6f1e92132e93e4fd978dc3d59d35b7b75f9';
 const versions = readVersions();
 if (new Set([versions.pkg, versions.info, versions.gradleName]).size !== 1) {
 	console.error('Le versioni non sono allineate:', versions, '\nUsa node tools/version.js <versione>.');
@@ -28,9 +30,17 @@ const latest = existsSync(buildTools) ? readdirSync(buildTools).sort((a, b) => a
 if (latest) {
 	const apksigner = join(buildTools, latest, process.platform === 'win32' ? 'apksigner.bat' : 'apksigner');
 	const report = execFileSync(apksigner, ['verify', '--print-certs', apk], { encoding: 'utf8', shell: process.platform === 'win32' });
-	console.log(report.split('\n').filter(line => /Signer #1 certificate (DN|SHA-256)/.test(line)).join('\n'));
+	// L'impronta del certificato deve essere quella della chiave di myCimmena (README, "Firma"): un APK firmato con
+	// un'altra chiave non si installerebbe sopra le versioni già installate.
+	const digests = [...report.matchAll(/certificate SHA-256 digest: ([0-9a-f]{64})/gi)].map(match => match[1].toLowerCase());
+	console.log(report.split(/\r?\n/).filter(line => /certificate (DN|SHA-256 digest)/i.test(line)).join('\n'));
+	if (!digests.length || digests.some(digest => digest !== EXPECTED_CERT)) {
+		console.error(`Firma inattesa: ${digests.join(', ') || 'nessuna impronta trovata'} invece di ${EXPECTED_CERT}.\n${report}`);
+		process.exit(1);
+	}
 } else {
-	console.warn('apksigner non trovato: firma non controllata.');
+	console.error('apksigner non trovato: firma non controllata.');
+	process.exit(1);
 }
 
 mkdirSync(join(root, 'dist'), { recursive: true });
