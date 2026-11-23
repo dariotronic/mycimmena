@@ -152,7 +152,9 @@ test('uses a new key only after OMDb accepts it, then completes saved titles', a
 	await ctx.details.useKey(' a1b2c3d4 ');
 	assert.equal(ctx.state.settings.omdbKey, 'a1b2c3d4');
 	assert.equal(ctx.details.mode(), 'full');
-	while (ctx.details.isRunning()) await new Promise(resolve => setTimeout(resolve, 5));
+	// Il completamento parte in sottofondo: si aspetta che arrivino i dettagli (non solo che non sia "in corso",
+	// che subito dopo useKey può essere ancora falso perché non è partito), al massimo 2 secondi.
+	for (let i = 0; i < 400 && (ctx.details.isRunning() || !ctx.state.movies.get('tt1').details); i++) await new Promise(resolve => setTimeout(resolve, 5));
 	assert.equal(ctx.state.movies.get('tt1').details.director, 'Ridley Scott');
 	const bad = await setup(() => json({ Response: 'False', Error: 'Invalid API key!' }, 401), { detailMode: 'full', omdbKeyStatus: 'missing' });
 	await assert.rejects(bad.details.useKey('ffffffff'), { kind: 'invalid' });
