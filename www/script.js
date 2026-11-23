@@ -11,7 +11,7 @@ import { shareHome as shareHomeImage } from './assets/js/share.js';
 import { createViews } from './assets/js/views.js';
 import { emptyState } from './assets/js/components.js';
 import { hydrateIcons } from './assets/js/icons.js';
-import { showErrorToast, showToast } from './assets/js/toasts.js';
+import { hideToast, showErrorToast, showToast } from './assets/js/toasts.js';
 import { addMeetingToCalendar } from './assets/js/calendar-file.js';
 import { initColorMode } from './assets/js/theme.js';
 import { createNavigation, route, updateBackToTopButton } from './assets/js/navigation.js';
@@ -301,9 +301,13 @@ function renderWhenIdle() {
 function bindViewEvents() {
 	document.getElementById('share-home')?.addEventListener('click', () => {
 		const meeting = data.upcoming && (!data.upcoming.date || data.upcoming.date >= today()) ? data.upcoming : null;
-		shareHomeImage(meeting, formatDate, meetingMovies).then(outcome => {
+		if (!meeting || document.getElementById('share-home').disabled) return;
+		// "Preparo l'immagine…" finché il menu Condividi non è aperto (o finché non va storto).
+		showToast('sharePreparing');
+		shareHomeImage(meeting, formatDate, meetingMovies, { onReady: hideToast }).then(outcome => {
 			if (outcome === 'shared') showToast('shareDone');
-			if (outcome === 'downloaded') showToast('shareDownloaded');
+			else if (outcome === 'downloaded') showToast('shareDownloaded');
+			else hideToast();
 		}).catch(showErrorToast);
 	});
 	// Nell'app si apre il calendario con l'evento già compilato; nel browser si scarica il file .ics.

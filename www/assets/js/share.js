@@ -326,7 +326,8 @@ function blobToBase64(blob) {
 	});
 }
 
-export async function shareHome(meeting, formatDate, meetingMovies) {
+// `onReady`: l'immagine è pronta e sta per aprirsi il menu Condividi (per togliere "Preparo l'immagine…").
+export async function shareHome(meeting, formatDate, meetingMovies, { onReady = () => {} } = {}) {
 	const button = document.getElementById('share-home');
 	if (!button || !meeting || button.disabled) return null;
 	button.disabled = true;
@@ -343,6 +344,7 @@ export async function shareHome(meeting, formatDate, meetingMovies) {
 		const plugins = globalThis.Capacitor?.isNativePlatform?.() ? globalThis.Capacitor.Plugins : null;
 		if (plugins?.Filesystem && plugins?.Share) {
 			const { uri } = await plugins.Filesystem.writeFile({ path: fileName, data: await blobToBase64(blob), directory: 'CACHE' });
+			onReady();
 			try {
 				await plugins.Share.share({ title: 'La prossima serata', files: [uri], dialogTitle: 'Condividi la prossima serata' });
 			} catch (error) {
@@ -351,6 +353,7 @@ export async function shareHome(meeting, formatDate, meetingMovies) {
 			}
 			return 'shared';
 		}
+		onReady();
 		const file = typeof File === 'function' ? new File([blob], fileName, { type: 'image/png' }) : null;
 		if (file && navigator.canShare && navigator.share) {
 			try {

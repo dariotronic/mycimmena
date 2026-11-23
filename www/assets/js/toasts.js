@@ -12,6 +12,8 @@ export const TOASTS = {
 	error: { enabled: true, variant: 'error', duration: 5000, message: ({ message }) => message || 'Si è verificato un errore.' },
 
 	// Home
+	// Mentre si prepara l'immagine (qualche secondo): resta finché non si apre il menu Condividi.
+	sharePreparing: { enabled: true, duration: 15000, message: 'Preparo l’immagine…' },
 	shareDone: { enabled: true, message: 'Immagine condivisa' },
 	shareDownloaded: { enabled: true, message: 'Immagine scaricata' },
 	calendarDownloaded: { enabled: true, message: 'Evento scaricato: aprilo per aggiungerlo al calendario' },
