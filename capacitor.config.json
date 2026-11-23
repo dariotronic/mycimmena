@@ -10,6 +10,10 @@
     "SystemBars": {
       "insetsHandling": "css",
       "initialViewportFitValueHint": "cover"
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_mycimmena",
+      "iconColor": "#8a1f2d"
     }
   }
 }

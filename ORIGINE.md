@@ -35,7 +35,7 @@ Da allora le due repo vanno ognuna per conto suo. Quando si corregge qualcosa in
 - Chiavi di `localStorage` da `clubdelcimmena-*` a `mycimmena-*`.
 - Modalità colore "giorno" e "notte" al posto di "colonizzatore" e "colonizzato".
 - Testi del cineforum ("Il prossimo cineforum", "Quando ci vediamo?", "Solo horror e sci-fi, pls.") resi neutri.
-- Nuovi: `boot.js` (tema salvato e controllo della WebView), `app-info.js` (versione e credit), `back-button.js`, `store.js`, `app-data.js`, `imdb.js`, `posters.js`, `diary.js`, `sanitize.js`, `omdb.js`, `details.js`, `series.js`, `series-ui.js`, `onboarding.js`, `settings.js`, `key-setup.js`, `movie-picker.js`, `profile.js`, `backup.js`, `backup-ui.js`, `zip.js`, `watchlist-import.js`, `import-ui.js`, `updates.js`, `update-ui.js`, i test in `tests/` oltre a `frontend.test.js`, `tools/serve.js`, `tools/version.js`, `tools/release.js`.
+- Nuovi: `boot.js` (tema salvato e controllo della WebView), `app-info.js` (versione e credit), `back-button.js`, `store.js`, `app-data.js`, `imdb.js`, `posters.js`, `diary.js`, `sanitize.js`, `omdb.js`, `details.js`, `series.js`, `series-ui.js`, `onboarding.js`, `settings.js`, `key-setup.js`, `movie-picker.js`, `profile.js`, `backup.js`, `backup-ui.js`, `zip.js`, `watchlist-import.js`, `import-ui.js`, `updates.js`, `update-ui.js`, `feedback.js`, `feedback-ui.js`, `notifications.js`, `server/feedback.php`, i test in `tests/` oltre a `frontend.test.js`, `tools/serve.js`, `tools/version.js`, `tools/release.js`, `tools/copy-server.js`.
 
 ## Correzioni riportate
 

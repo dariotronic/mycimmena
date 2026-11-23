@@ -40,7 +40,8 @@ L'app si distribuisce come APK fuori dal Play Store. I dati dell'utente restano 
 - Plugin previsti:
   - `@capacitor/filesystem`: backup in Documenti (e in v2 l'APK scaricato); le locandine stanno in IndexedDB
   - `@capacitor/share`: esportazione del backup con il menu Condividi
-  - `@capacitor/local-notifications`: compleanno e serata in programma
+  - `@capacitor/local-notifications`: compleanno e serata in programma (senza sveglie esatte: niente permesso "Sveglie e promemoria")
+  - `@capacitor/device`: versione di Android, modello e WebView nelle informazioni tecniche delle segnalazioni
   - `@capacitor/browser`: pagina di registrazione OMDb, link esterni (Instagram, GitHub)
   - `@capacitor/app`: tasto Indietro (già dalla Fase 0), versione dell'app e ritorno in primo piano
   - `@capacitor/clipboard`: rilevamento della chiave copiata
@@ -335,10 +336,12 @@ GitHub concede 60 richieste l'ora **per indirizzo IP** senza login, e il conto �
   - Email per la risposta facoltativa.
   - Fino a 3 immagini facoltative: l'app le riduce a 1600 px sul lato lungo, in JPEG, prima dell'invio.
 - **Informazioni tecniche** allegate con una casella attiva di default e "Vedi cosa viene inviato": versione dell'app, versione di Android e della WebView, modello del telefono, modalità light o completa. Mai la chiave OMDb né i dati del diario.
-- **Invio** con `POST multipart` a `server/feedback.php` su IONOS (§18 per il dominio), con `CapacitorHttp`.
+- **Invio** con `POST multipart` (campo `images[]` per le immagini) a `https://www.clubdelcimmena.it/mycimmena/feedback.php`, con un `fetch` normale: il server risponde con CORS all'origine dell'app (`https://localhost`), quindi `CapacitorHttp` non serve. La CSP dell'app permette solo connessioni HTTPS.
+- **Dove sta il server:** l'originale è `server/feedback.php` (con `server/.htaccess`) in questa repo; `node tools/copy-server.js` lo copia in `CLUBDELCIMMENA/mycimmena/`, e il deploy automatico del sito lo carica su IONOS. Il deploy scrive anche `mycimmena/config.php` dal Secret `MYCIMMENA_FEEDBACK_TO` della repo del sito (e `MYCIMMENA_FEEDBACK_FROM`, facoltativo): l'indirizzo non è in nessuna repo.
 - **Server:**
   - **Controlli:** dimensioni (testo, numero e peso delle immagini, solo JPEG/PNG/WebP verificati dal contenuto), campo trappola nascosto contro i bot, limite di 5 invii al giorno per IP (file su disco con hash dell'IP, come `admin_auth_attempts` del sito).
-  - **Invio della mail** a Dario con gli allegati, tramite SMTP IONOS (PHPMailer) o `mail()`. L'indirizzo di destinazione sta in un `config.php` non versionato e non raggiungibile dal web.
+  - **Invio della mail** a Dario con gli allegati, con `mail()` di PHP (deciso in Fase 4: niente password da gestire), mittente `noreply@clubdelcimmena.it`, `Reply-To` l'email dell'utente se c'è. L'indirizzo di destinazione sta in `config.php`, non versionato; `.htaccess` lascia raggiungibile dal web solo `feedback.php`.
+  - **Limite:** il contatore per IP sta in `mycimmena/data/` come impronta SHA-256 (con un sale) dell'indirizzo, mai l'IP in chiaro; dietro Cloudflare l'IP è quello di `CF-Connecting-IP`. L'app tiene anche un suo conto (`meta.feedbackSentAt`) per avvisare prima di inviare.
   - Risponde in JSON. **Non** salva copie delle segnalazioni né le immagini dopo l'invio.
 - Senza connessione: "Sei offline, riprova quando torna la connessione". Il testo resta nel modulo.
 
@@ -346,10 +349,12 @@ GitHub concede 60 richieste l'ora **per indirizzo IP** senza login, e il conto �
 
 ## 12. Notifiche locali
 
-- **Compleanno:** se l'utente ha dato la data di nascita, alle 9:00 del giorno arriva una notifica di auguri e la Home mostra un messaggio speciale (🎂, magari un film estratto dalla watchlist "per festeggiare").
-- **Serata in programma:** promemoria la mattina del giorno.
-- Android 13+ chiede il permesso per le notifiche: lo si chiede al primo momento in cui serve (data di nascita inserita o serata salvata), non all'avvio.
-- Si attivano e disattivano dalle Impostazioni.
+- **Compleanno:** se l'utente ha dato la data di nascita, alle 9:00 del giorno arriva una notifica di auguri ("Per festeggiare: {film del cuore}?") e la Home mostra un messaggio speciale. Si programma la prossima data precisa (il 29 febbraio diventa il 28 negli anni non bisestili) e all'apertura successiva dell'app si passa all'anno dopo: la ripetizione annuale del plugin conta i mesi in modo diverso su Android e iOS.
+- **Serata in programma:** promemoria alle 9:00 del giorno, solo se la serata ha una data e almeno un film.
+- Ogni lettura dei dati ricalcola cosa programmare e, se è cambiato, cancella e riprogramma le due notifiche (id 1001 e 1002).
+- Android 13+ chiede il permesso per le notifiche: lo si chiede al primo momento in cui serve (compleanno salvato, serata salvata con una data, interruttore acceso), non all'avvio. Se Android le blocca, le Impostazioni dicono dove riattivarle.
+- Orario non esatto (`isExactNotification: false`, permesso `SCHEDULE_EXACT_ALARM` tolto dal manifest): con le sveglie esatte Android 14+ apriva la pagina "Sveglie e promemoria" per chiedere un permesso in più.
+- Si attivano e disattivano dalle Impostazioni, una per una.
 
 ---
 
@@ -481,9 +486,10 @@ Alla fine della Fase 0 l'app si apre con dati vuoti: ogni modifica risponde "Non
 - [x] Controllo aggiornamenti all'apertura, ogni ora e manuale, con ETag e limiti (v1: apertura nel browser)
 
 **Fase 4: segnalazioni e notifiche**
-- [ ] `server/feedback.php` e deploy su IONOS
-- [ ] Modulo nell'app con immagini ridotte e informazioni tecniche
-- [ ] Notifiche locali: compleanno e serata
+- [x] `server/feedback.php` (provato con il PHP di XAMPP: controlli, immagini vere e false, campo trappola, limite di 5 al giorno, CORS)
+- [ ] Deploy su IONOS: copia in `CLUBDELCIMMENA/mycimmena/`, workflow del sito che scrive `config.php` dai Secrets, Secret `MYCIMMENA_FEEDBACK_TO`, prova di una segnalazione vera
+- [x] Modulo nell'app con immagini ridotte (1600 px, JPEG) e informazioni tecniche, provato sul telefono e nel browser con il server di prova
+- [x] Notifiche locali: compleanno e serata, interruttori nelle Impostazioni, permesso chiesto dopo un'azione, provate sul telefono
 
 **Fase 5: extra**
 - [ ] Statistiche
@@ -512,4 +518,4 @@ Proposte; ne sceglierei 3 o 4, tutte saltabili, sulla stessa schermata. Le prime
 
 ### Altro
 - **Icona:** logo del Club ricolorato con la tavolozza "my", oppure una variante con "my" ben visibile.
-- **Dominio di `feedback.php`:** proposta `https://www.clubdelcimmena.it/mycimmena/feedback.php`, sullo stesso spazio IONOS del sito.
+- **Dominio di `feedback.php`:** deciso in Fase 4: `https://www.clubdelcimmena.it/mycimmena/feedback.php`, sullo stesso spazio IONOS del sito, caricato dal deploy del sito.

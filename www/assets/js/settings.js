@@ -7,7 +7,8 @@ import { bindMoviePicker } from './movie-picker.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export function createSettings({ store, details, getData, refresh }) {
+// onProfileSaved: dopo il salvataggio del profilo (compleanno → permesso delle notifiche).
+export function createSettings({ store, details, getData, refresh, onProfileSaved = () => {} }) {
 	const keyDialog = document.getElementById('omdb-key-dialog');
 	const keyBody = document.getElementById('omdb-key-body');
 	const banner = document.getElementById('mode-banner');
@@ -75,6 +76,7 @@ export function createSettings({ store, details, getData, refresh }) {
 				await store.updateKv('profile', values);
 				await refresh();
 				showToast('profileSaved');
+				onProfileSaved();
 			} catch (error) {
 				showErrorToast(error);
 			}

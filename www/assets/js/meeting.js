@@ -3,7 +3,8 @@
 import { meetingMovies, today } from './domain.js';
 import { showErrorToast, showToast } from './toasts.js';
 
-export function createMeeting({ store, getData, render, loadData, askConfirmation, runUndoable, flushUndoable, clearSelectedMovie }) {
+// onPlannedSaved: dopo il salvataggio di una serata (per chiedere il permesso delle notifiche, notifications.js).
+export function createMeeting({ store, getData, render, loadData, askConfirmation, runUndoable, flushUndoable, clearSelectedMovie, onPlannedSaved = () => {} }) {
 	const scheduledMovieIds = () => new Set(meetingMovies(getData().upcoming).map(movie => movie.id));
 	const selectableMovies = () => {
 		const scheduled = scheduledMovieIds();
@@ -26,6 +27,7 @@ export function createMeeting({ store, getData, render, loadData, askConfirmatio
 			await loadData();
 			render();
 			showToast('meetingSaved', { past: next.date !== null && next.date < today() });
+			onPlannedSaved();
 		} catch (error) {
 			showErrorToast(error);
 		}

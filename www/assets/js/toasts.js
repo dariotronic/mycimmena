@@ -52,6 +52,10 @@ export const TOASTS = {
 	importMatched: { enabled: true, message: 'Abbinamento finito: apri Impostazioni → Importa watchlist per il riepilogo' },
 	watchlistImported: { enabled: true, message: ({ count }) => count === 1 ? '1 titolo importato nella watchlist' : `${count} titoli importati nella watchlist` },
 
+	// Segnalazioni e notifiche
+	feedbackSent: { enabled: true, duration: 4000, message: 'Segnalazione inviata, grazie!' },
+	notificationsChanged: { enabled: true, message: ({ on }) => on ? 'Notifica attiva' : 'Notifica spenta' },
+
 	// Aggiornamenti
 	updateNone: { enabled: true, message: ({ message }) => message || 'Hai già l’ultima versione' },
 	updateDownloading: { enabled: true, duration: 5000, message: 'Download avviato: al termine apri il file per installare l’aggiornamento' },

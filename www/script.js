@@ -31,6 +31,8 @@ import { createSettings } from './assets/js/settings.js';
 import { createBackupUi } from './assets/js/backup-ui.js';
 import { createImportUi } from './assets/js/import-ui.js';
 import { createUpdates } from './assets/js/update-ui.js';
+import { createFeedbackUi } from './assets/js/feedback-ui.js';
+import { createNotifications } from './assets/js/notifications.js';
 
 hydrateIcons(document);
 
@@ -119,7 +121,11 @@ const diary = createDiary({
 	refresh
 });
 createSeriesUi({ app, store, details, getData, refresh, ask, askConfirmation, openViewing: target => diary.openViewingForm(target), refreshMovieInfo });
-const settings = createSettings({ store, details, getData, refresh });
+// Notifiche locali: si riallineano da sole dopo ogni lettura dei dati; il permesso si chiede solo dopo un'azione.
+const notifications = createNotifications({ getData });
+const askNotifications = () => notifications.sync({ ask: true }).then(updateNotifyStatus);
+const settings = createSettings({ store, details, getData, refresh, onProfileSaved: () => getData().profile?.birthday && askNotifications() });
+const feedback = createFeedbackUi({ store, getData, refresh: loadData });
 // Dopo un ripristino o un'importazione: locandine e dettagli dei titoli nuovi in sottofondo.
 const completeNewTitles = ids => {
 	if (!state) return;
@@ -145,6 +151,7 @@ const onboarding = createOnboarding({
 	refresh: loadData,
 	openBackup: () => backup.open(),
 	openImport: options => importer.open(options),
+	onProfileSaved: askNotifications,
 	onFinish: () => {
 		location.hash = '#lista';
 		render();
@@ -156,7 +163,7 @@ const randomizer = createRandomizer({
 	selectableMovies: () => meetingActions.selectableMovies(),
 	scheduleMovie: movieId => meetingActions.scheduleMovie(movieId)
 });
-const meetingActions = createMeeting({ store, getData, render, loadData, askConfirmation, runUndoable, flushUndoable, clearSelectedMovie: randomizer.clearSelectedMovie });
+const meetingActions = createMeeting({ store, getData, render, loadData, askConfirmation, runUndoable, flushUndoable, clearSelectedMovie: randomizer.clearSelectedMovie, onPlannedSaved: () => getData().upcoming?.date && askNotifications() });
 const watchlist = createWatchlist({
 	getData,
 	viewRenderer,
@@ -208,6 +215,15 @@ async function loadData() {
 		state = null;
 	}
 	rebuildData();
+	notifications.sync();
+}
+
+// Riga "Notifiche" delle Impostazioni: avviso se Android le ha bloccate.
+async function updateNotifyStatus() {
+	const status = document.querySelector('[data-notify-status]');
+	if (!status) return;
+	const state = await notifications.permission();
+	status.textContent = state === 'denied' ? 'Android blocca le notifiche di myCimmena: riattivale da Impostazioni di Android → App → myCimmena → Notifiche.' : '';
 }
 
 const ROUTE_TITLES = { home: 'Home', calendario: 'Serata', diario: 'Diario', prossimi: 'Randomizer', lista: 'Watchlist', impostazioni: 'Impostazioni', informazioni: 'Informazioni' };
@@ -291,6 +307,15 @@ function bindViewEvents() {
 	settings.bind();
 	updates.bind();
 	document.querySelector('[data-open-backup]')?.addEventListener('click', () => backup.open());
+	document.querySelector('[data-open-feedback]')?.addEventListener('click', () => feedback.open());
+	document.querySelectorAll('[data-notify]').forEach(toggle => toggle.addEventListener('click', async event => {
+		const on = event.currentTarget.getAttribute('aria-checked') !== 'true';
+		await store.updateKv('settings', { [event.currentTarget.dataset.notify]: on });
+		await refresh();
+		showToast('notificationsChanged', { on });
+		if (on) askNotifications();
+	}));
+	updateNotifyStatus();
 	document.querySelector('[data-backup-reminder]')?.addEventListener('click', async event => {
 		const on = event.currentTarget.getAttribute('aria-checked') !== 'true';
 		await store.updateKv('settings', { backupReminder: on });

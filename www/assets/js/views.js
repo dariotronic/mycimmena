@@ -915,6 +915,27 @@ export function createViews(context) {
 						<div class="button-row"><button class="button secondary" type="button" data-open-import>${data.importJob ? 'Riprendi l’importazione' : 'Importa watchlist'}</button></div>
 					</div>
 				</div>
+				<div class="profile-setting-row settings-notifications">
+					<div>
+						<p class="field-label">Notifiche</p>
+						<div class="setting-switch-row">
+							<span id="notify-birthday-label">Auguri alle 9 del giorno del compleanno${profile.birthday ? '' : ' (aggiungi la data nel profilo)'}</span>
+							<button class="setting-switch" type="button" role="switch" aria-checked="${data.settings?.notifyBirthday !== false}" aria-labelledby="notify-birthday-label" data-notify="notifyBirthday"><span class="setting-switch-thumb" aria-hidden="true"></span></button>
+						</div>
+						<div class="setting-switch-row">
+							<span id="notify-evening-label">Promemoria alle 9 del giorno della serata in programma</span>
+							<button class="setting-switch" type="button" role="switch" aria-checked="${data.settings?.notifyEvening !== false}" aria-labelledby="notify-evening-label" data-notify="notifyEvening"><span class="setting-switch-thumb" aria-hidden="true"></span></button>
+						</div>
+						<p class="help-text" data-notify-status></p>
+					</div>
+				</div>
+				<div class="profile-setting-row settings-feedback">
+					<div>
+						<p class="field-label">Segnalazioni</p>
+						<span>Un problema, un’idea, un saluto: arriva a chi ha fatto l’app.</span>
+						<div class="button-row"><button class="button secondary" type="button" data-open-feedback>Segnala un problema o proponi un’idea</button></div>
+					</div>
+				</div>
 				<a class="profile-setting-row settings-link" href="#informazioni">
 					<div><p class="field-label">Informazioni</p><span>Fonti dei dati, privacy e licenze</span></div>
 					${icon('info')}
@@ -942,7 +963,9 @@ export function createViews(context) {
 					<h2 class="section-title">Privacy</h2>
 					<ul>
 						<li>Tutti i tuoi dati (watchlist, diario, profilo, chiave OMDb) restano su questo telefono. Non ci sono account né server con i tuoi dati.</li>
-						<li>L'app contatta solo IMDb, OMDb e GitHub, e il server delle segnalazioni quando ne invii una.</li>
+							<li>L'app contatta solo IMDb, OMDb e GitHub, e il server delle segnalazioni quando ne invii una.</li>
+							<li>Una segnalazione contiene il testo, il tipo, la tua email se la scrivi, le immagini che alleghi e, se lasci la casella attiva, versione dell'app, di Android e della WebView, modello del telefono e tipo di schede. Mai la chiave OMDb né watchlist, diario o voti. Il server la inoltra per mail e non ne conserva copia; per il limite di 5 al giorno tiene solo un'impronta anonima dell'indirizzo IP, per un giorno.</li>
+							<li>Le notifiche (compleanno e serata) le programma il telefono: non passano da nessun server.</li>
 						<li>Nessuna pubblicità, nessuna statistica d'uso.</li>
 							<li>Disinstallando l'app o cancellandone i dati si perde tutto: per cambiare telefono o non rischiare, esporta un backup dalle Impostazioni. Il file del backup contiene anche la tua chiave OMDb.</li>
 					</ul>

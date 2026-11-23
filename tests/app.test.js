@@ -43,7 +43,7 @@ test('shows the theme switch, the version and the credit in Settings', () => {
 	assert.match(html, /<p class="app-credit">made with 🎬 by <a href="https:\/\/www\.instagram\.com\/dariotronic\/" target="_blank" rel="noopener noreferrer">@dariotronic<\/a><\/p>/);
 	// Il credit sta in fondo, dopo tutte le impostazioni.
 	assert.ok(html.indexOf('app-credit') > html.lastIndexOf('profile-setting-row'));
-	assert.doesNotMatch(html, /Accedi|password|Esci|Notifiche/);
+	assert.doesNotMatch(html, /Accedi|password|Esci|push/);
 });
 
 test('checks the WebView before the app starts and applies the saved theme first', () => {

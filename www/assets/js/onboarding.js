@@ -41,7 +41,8 @@ const PLANS = {
 };
 
 // openBackup: ripristino di un backup dal benvenuto (telefono nuovo); openImport: importazione della watchlist.
-export function createOnboarding({ store, details, getData, refresh, onFinish, openBackup = () => {}, openImport = () => {} }) {
+// onProfileSaved: dopo "Chi sei?" con il compleanno, per chiedere il permesso delle notifiche.
+export function createOnboarding({ store, details, getData, refresh, onFinish, openBackup = () => {}, openImport = () => {}, onProfileSaved = () => {} }) {
 	const root = document.getElementById('onboarding');
 	let unbindKey = () => {};
 
@@ -258,6 +259,7 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 				const values = formValues();
 				if (values) await store.updateKv('profile', values);
 				await next();
+				if (values?.birthday) onProfileSaved();
 			}
 		} catch (error) {
 			showErrorToast(error);

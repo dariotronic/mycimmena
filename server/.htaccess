@@ -1,0 +1,6 @@
+# Cartella /mycimmena/ sul sito: dal web si raggiunge solo feedback.php.
+# config.php (indirizzo di destinazione) e data/ (contatori del limite giornaliero) restano privati.
+Options -Indexes
+<FilesMatch "^(?!feedback\.php$)">
+  Require all denied
+</FilesMatch>

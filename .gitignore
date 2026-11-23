@@ -21,6 +21,7 @@ android/keystore.properties
 
 # Configurazione del server con dati privati
 server/config.php
+server/data/
 
 # Editor e sistema
 .idea/

@@ -13,7 +13,7 @@ const APP_MODULES = [
 	'theme', 'navigation', 'dialogs', 'movie-info', 'undo', 'diary', 'meeting', 'randomizer', 'watchlist',
 	'search', 'review-editor', 'lightbox-zoom', 'store', 'posters', 'imdb', 'app-data', 'series', 'series-ui', 'details',
 	'omdb', 'onboarding', 'settings', 'key-setup', 'movie-picker', 'profile', 'backup', 'backup-ui', 'zip',
-	'watchlist-import', 'import-ui', 'updates', 'update-ui'
+	'watchlist-import', 'import-ui', 'updates', 'update-ui', 'feedback', 'feedback-ui', 'notifications'
 ];
 const readAppScripts = () => ['../www/script.js', ...APP_MODULES.map(name => `../www/assets/js/${name}.js`)]
 	.map(path => readFileSync(new URL(path, import.meta.url), 'utf8'))

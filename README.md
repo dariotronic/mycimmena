@@ -12,6 +12,8 @@ App Android personale per tenere traccia di film e serie visti e da vedere. I da
 - `tools/serve.js`: server locale per provare `www/` nel browser.
 - `tools/version.js`: cambia la versione in tutti i file (`npm run set-version -- 1.2.0`).
 - `tools/release.js`: controlla la firma dell'APK di release e lo copia in `dist/`.
+- `server/`: `feedback.php` per le segnalazioni (vedi sotto).
+- `tools/copy-server.js`: copia `server/` nella repo del sito (`--check` per confrontare).
 
 ## Cosa serve
 
@@ -53,6 +55,14 @@ npm run set-version -- 1.2.0
 ```
 
 `npm test` controlla che siano allineate.
+
+## Segnalazioni (server)
+
+L'app manda le segnalazioni a `https://www.clubdelcimmena.it/mycimmena/feedback.php`, che le inoltra per mail con `mail()` di PHP.
+
+- L'originale è `server/feedback.php` (più `server/.htaccess`). Dopo una modifica: `node tools/copy-server.js`, poi commit e push della repo `CLUBDELCIMMENA`, il cui deploy automatico carica `mycimmena/` su IONOS.
+- L'indirizzo che riceve le segnalazioni è il Secret `MYCIMMENA_FEEDBACK_TO` della repo `CLUBDELCIMMENA` (Settings → Secrets and variables → Actions); il deploy lo scrive in `mycimmena/config.php` sul server. Facoltativo `MYCIMMENA_FEEDBACK_FROM` per il mittente (predefinito `noreply@clubdelcimmena.it`).
+- `npm test` prova `feedback.php` con il server integrato di PHP se trova `php` (nel PATH, in `PHP_BIN` o in `C:\xampp\php`); altrimenti quel test si salta.
 
 ## Firma
 
