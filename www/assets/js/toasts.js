@@ -66,7 +66,8 @@ export const TOASTS = {
 	profileSaved: { enabled: true, message: 'Profilo salvato' },
 	keySaved: { enabled: true, message: 'Chiave OMDb attiva: le schede si completano da sole' },
 	modeChanged: { enabled: true, message: ({ mode }) => ({ light: 'Schede light', full: 'Schede complete', waiting: 'Schede complete in attesa della chiave' })[mode] || 'Modalità cambiata' },
-	themeChanged: { enabled: true, message: ({ mode }) => mode === 'night' ? 'Modalità notte' : 'Modalità giorno' }
+	themeChanged: { enabled: true, message: ({ mode }) => mode === 'night' ? 'Modalità notte' : 'Modalità giorno' },
+	posterThemeChanged: { enabled: true, message: ({ on }) => (on ? 'Colori dal film del cuore' : 'Colori di myCimmena') }
 };
 
 let toastElement = null;

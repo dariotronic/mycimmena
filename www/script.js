@@ -33,6 +33,7 @@ import { createImportUi } from './assets/js/import-ui.js';
 import { createUpdates } from './assets/js/update-ui.js';
 import { createFeedbackUi } from './assets/js/feedback-ui.js';
 import { createNotifications } from './assets/js/notifications.js';
+import { createPosterTheme } from './assets/js/poster-theme-ui.js';
 import { renderStats } from './assets/js/stats-ui.js';
 import { pageHeader } from './assets/js/components.js';
 
@@ -48,8 +49,10 @@ initColorMode();
 const navigation = createNavigation({ app });
 initBackButton({ closeMenu: navigation.closeMenu, onBack: () => onboarding.handleBack() });
 const { ask, askConfirmation, openImageLightbox } = createDialogs({ app });
+// Colori dal film del cuore: si riallineano dopo ogni lettura dei dati e quando arriva la sua locandina.
+const posterTheme = createPosterTheme({ store, getData });
 // Le locandine scaricate in sottofondo compaiono al ridisegno successivo, senza interrompere chi sta scrivendo.
-const posters = createPosters({ store, onSaved: () => { rebuildData(); renderWhenIdle(); } });
+const posters = createPosters({ store, onSaved: () => { rebuildData(); renderWhenIdle(); posterTheme.sync(); } });
 // Dettagli da OMDb (modalità completa): quando arrivano si rileggono i dati e si aggiornano vista e scheda aperta.
 const details = createDetails({
 	store,
@@ -224,6 +227,7 @@ async function loadData() {
 	}
 	rebuildData();
 	notifications.sync();
+	posterTheme.sync();
 }
 
 // Riga "Notifiche" delle Impostazioni: avviso se Android le ha bloccate.
@@ -336,6 +340,12 @@ function bindViewEvents() {
 	document.querySelector('[data-stats-year]')?.addEventListener('change', event => {
 		statsYear = event.target.value;
 		render();
+	});
+	document.querySelector('[data-poster-theme]')?.addEventListener('click', async event => {
+		const on = event.currentTarget.getAttribute('aria-checked') !== 'true';
+		await store.updateKv('settings', { posterTheme: on });
+		await refresh();
+		showToast('posterThemeChanged', { on });
 	});
 	document.querySelector('[data-backup-reminder]')?.addEventListener('click', async event => {
 		const on = event.currentTarget.getAttribute('aria-checked') !== 'true';

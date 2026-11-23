@@ -29,6 +29,8 @@ function setColorMode(mode, persist = false) {
 	});
 	if (themeColorMeta) themeColorMeta.content = isNight ? '#141114' : '#f8f2ef';
 	syncSystemBars(isNight);
+	// Per i colori dal film del cuore (poster-theme-ui.js), che hanno una palette per modalità.
+	document.dispatchEvent(new CustomEvent('colormodechange', { detail: { mode: isNight ? 'night' : 'day' } }));
 	if (persist) {
 		try {
 			localStorage.setItem(COLOR_MODE_KEY, isNight ? 'night' : 'day');

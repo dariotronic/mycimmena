@@ -938,6 +938,7 @@ export function createViews(context) {
 		const lastBackup = data.meta?.lastBackupAt || '';
 		const reminderOn = data.settings?.backupReminder !== false;
 		const hasBirthday = Boolean(birthdayMonthDay(profile.birthday));
+		const posterThemeOn = data.settings?.posterTheme !== false;
 		return `
 			${pageHeader('Impostazioni', profile.name ? `Ciao, ${profile.name}!` : 'Ciao!')}
 			<section class="settings-panel">
@@ -986,6 +987,17 @@ export function createViews(context) {
 							${icon('light_mode')}${icon('dark_mode')}<span class="theme-toggle-thumb"></span>
 						</span>
 					</button>
+				</div>
+				<div class="profile-setting-row settings-poster-theme">
+					<div>
+						<div class="setting-switch-row">
+							<span id="poster-theme-label">Colori dal film del cuore</span>
+							<button class="setting-switch" type="button" role="switch" aria-checked="${posterThemeOn}" aria-labelledby="poster-theme-label" aria-describedby="poster-theme-help" data-poster-theme><span class="setting-switch-thumb" aria-hidden="true"></span></button>
+						</div>
+						<p class="help-text" id="poster-theme-help">${data.favorite
+							? `L’accento e gli altri colori dell’app vengono dalla locandina di ${escapeHtml(movieName(data.favorite))}, di giorno e di notte. Spento, torna il rosso di myCimmena.`
+							: 'Scegli un film del cuore in «Modifica il profilo»: l’app prenderà i colori dalla sua locandina.'}</p>
+					</div>
 				</div>
 				<div class="profile-setting-row settings-backup">
 					<div>
