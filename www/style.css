@@ -898,7 +898,7 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .diary-episodes[open] .diary-episodes-toggle { transform: rotate(180deg); }
 .diary-episode-list { display: grid; gap: 8px; margin: 12px 0 0 88px; }
 .diary-episodes-label { margin: 4px 0 0; color: var(--rust); font-size: .9rem; font-weight: 700; }
-.diary-average { margin-left: 6px; color: var(--muted); font-size: .75rem; }
+.diary-average { flex-basis: 100%; margin-top: 2px; color: var(--muted); font-size: .75rem; }
 .diary-episode-actions { display: flex; align-items: center; gap: 4px; }
 /* Una visione in sola lettura (occhio nel diario), con la matita per passare al modulo. */
 .viewing-summary { display: grid; gap: 14px; }
