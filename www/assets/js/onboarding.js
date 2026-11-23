@@ -154,7 +154,7 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 
 	const VIEWS = {
 		welcome: () => frame(`
-			<img class="onboarding-logo" src="assets/logo.svg" alt="" width="120" height="120">
+			<span class="onboarding-logo logo-mark" aria-hidden="true"></span>
 			<h1 tabindex="-1">Benvenuto in myCimmena</h1>
 			<p class="onboarding-lead">Tieni traccia dei film e delle serie che vuoi vedere e di quelli che hai visto, con i tuoi voti. Tutto resta sul tuo telefono.</p>
 		`, { showBack: false, nextLabel: 'Iniziamo', extra: '<button class="button secondary" type="button" data-ob-restore>Ho un backup: ripristinalo</button>' }),
@@ -230,7 +230,7 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 			extra: '<button class="button secondary" type="button" data-ob-next>Salta</button>'
 		}),
 		end: () => frame(`
-			<img class="onboarding-logo" src="assets/logo.svg" alt="" width="120" height="120">
+			<span class="onboarding-logo logo-mark" aria-hidden="true"></span>
 			<h1 tabindex="-1">Ciao${profile().name ? `, ${escapeHtml(profile().name)}` : ''}!</h1>
 			<p class="onboarding-lead">È tutto pronto. Cerca il primo film da aggiungere alla watchlist con il ${icon('add')} in alto.</p>
 		`, { nextLabel: 'Entra', nextAttrs: 'data-ob-finish' })

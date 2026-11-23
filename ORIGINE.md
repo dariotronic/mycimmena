@@ -16,7 +16,8 @@ Da allora le due repo vanno ognuna per conto suo. Quando si corregge qualcosa in
 | `script.js` | `www/script.js`, senza login, push, link per la password, copia offline dei dati e aggiornamento periodico dal server |
 | `style.css` | `www/style.css`, con i temi "my" e senza gli stili delle parti tolte |
 | `assets/js/*.js` | `www/assets/js/`, meno i moduli tolti (sotto) |
-| `assets/fonts/`, `assets/logo.svg` | uguali |
+| `assets/fonts/` | uguali |
+| `assets/logo.svg` | base della sagoma di `assets/logo-my.svg`, il rapace minimale di myCimmena (dalla 1.0.0 il file del sito non c’è più) |
 | `assets/favicon/` | solo `favicon.svg` e l'immagine da 512 px, come base per l'icona |
 | `tests/frontend.test.js` | `tests/frontend.test.js`, senza i test delle parti tolte e con i percorsi in `www/` |
 

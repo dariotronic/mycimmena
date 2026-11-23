@@ -1,6 +1,89 @@
 # myCimmena
 
-App Android personale per tenere traccia di film e serie visti e da vedere. I dati restano sul telefono: niente account, niente server con i dati personali. Si installa come APK dalle [Release](https://github.com/dariotronic/mycimmena/releases).
+<img src="www/assets/favicon/web-app-manifest-512x512.png" alt="Icona di myCimmena: il rapace color carta su rosso velluto" width="96" align="right">
+
+**Il tuo diario di film e serie, sul telefono.** Tieni la lista di quello che vuoi vedere, organizza la prossima serata, fatti scegliere il film dal randomizer e annota cosa hai visto, con voto e note. Tutto resta sul tuo telefono: niente account, niente pubblicità, nessun server con i tuoi dati.
+
+myCimmena è un'app per Android, gratuita. Nasce dal sito del [Club del Cimmena](https://www.clubdelcimmena.it/).
+
+**[⬇ Scarica l'ultima versione](https://github.com/dariotronic/mycimmena/releases/latest)** · [Come si installa](#installazione) · [Cosa fa](#cosa-fa)
+
+## Cosa fa
+
+**Watchlist**
+- Cerchi un film o una serie e lo aggiungi con un tocco: locandina, anno e attori arrivano da IMDb.
+- Con l'**Hypometro** dici quanta voglia hai di vederlo, da 😶 a 🔥: la lista si ordina e si filtra anche così.
+- Vista a lista o a card (2 o 3 per riga), ricerca, ordinamento per data, titolo, anno o hype.
+- Importi la watchlist che hai già su **Letterboxd** o **IMDb**, dal file che quei siti ti fanno scaricare.
+
+**La prossima serata**
+- Data, luogo e titoli in programma, direttamente in Home.
+- La condividi come immagine (WhatsApp, Telegram…) e la aggiungi al calendario del telefono.
+- Il giorno della serata ti arriva un promemoria; quando è passata, l'app ti chiede com'è andata e mette i titoli nel diario.
+
+**Randomizer**
+- Non sapete cosa guardare? Una slot machine estrae un titolo dalla watchlist, se vuoi pesando l'Hypometro (più voglia, più probabilità).
+- Filtri per film o serie, scarta un titolo e rigira, guarda le probabilità di ciascuno.
+
+**Diario**
+- Ogni visione con data, dove e con chi, voto da mezza a dieci "spipe" e note con grassetto, corsivo, citazioni ed elenchi.
+- Le visioni si leggono per intero con l'occhio 👁 e si modificano con la matita.
+- **Statistiche**: quanti film e episodi, quante ore, i voti, anno per anno.
+- Importi diario e voti da Letterboxd o IMDb.
+
+**Serie TV**
+- Segni gli episodi uno per uno, o una stagione intera in una data: ogni episodio ha la sua data, il suo voto e le sue note.
+- Nel diario gli episodi visti lo stesso giorno stanno insieme in una card che si apre.
+- In "Stai guardando" vedi a che punto sei e il prossimo episodio, con un tocco lo segni come visto.
+- A fine stagione e a fine serie l'app ti propone il voto; puoi ricominciare una serie da capo.
+
+**Schede light o complete**
+- *Light*: funziona subito, con i dati di IMDb.
+- *Completa*: trama, regista, cast, durata, genere, voto IMDb e premi, e le stagioni delle serie, da [OMDb](https://www.omdbapi.com/) con una chiave gratuita personale (ti registri solo con la mail, in 2–3 minuti; l'app ti guida).
+
+**Tutto tuo**
+- Profilo con il tuo film del cuore e il compleanno: quel giorno l'app ti fa gli auguri.
+- Tema giorno e notte, e se vuoi i **colori dell'app presi dalla locandina del tuo film del cuore**.
+- **Backup** in un file, da tenere dove vuoi: serve anche per cambiare telefono.
+- Gli aggiornamenti li trovi e li installi dall'app stessa.
+
+## Installazione
+
+myCimmena non è sul Play Store: si installa scaricando il file dell'app (un APK) da questa pagina. Serve **Android 7 o più recente**.
+
+1. **Sul telefono**, apri la pagina **[dell'ultima versione](https://github.com/dariotronic/mycimmena/releases/latest)** e tocca il file **`mycimmena-X.Y.Z.apk`** in fondo, sotto *Assets*.
+2. Quando il download è finito, tocca la notifica o apri il file dai *Download*.
+3. La prima volta Android ti chiede di **consentire l'installazione di app da questa origine** (il browser, per esempio Chrome): tocca *Impostazioni*, attiva *Consenti da questa origine* e torna indietro.
+4. Tocca **Installa**. Se compare *Play Protect* (“App non riconosciuta”), tocca *Altri dettagli* → *Installa comunque*: succede con tutte le app che non arrivano dal Play Store.
+5. Apri **myCimmena**: un breve benvenuto ti chiede nome, gusti e che schede preferisci. Tutto si può cambiare dopo dalle Impostazioni.
+
+> Se l'app mostra “Serve un aggiornamento”, aggiorna **Android System WebView** (o Chrome) dal Play Store e riaprila.
+
+### Aggiornamenti
+
+All'apertura l'app controlla se c'è una versione nuova e ti avvisa con le novità. Tocca **Aggiorna**: la scarica e la installa da sola, senza perdere i dati. La prima volta Android ti chiede di consentire a myCimmena di installare app: l'avviso ti porta alla pagina giusta. Puoi controllare anche a mano da *Impostazioni → Versione*.
+
+### Cambiare telefono (o non perdere niente)
+
+I dati stanno **solo sul telefono**: se disinstalli l'app o ne cancelli i dati, si perdono. Per questo:
+
+1. Sul telefono vecchio: *Impostazioni → Backup → Esporta o ripristina* e salva il file (in Documenti, oppure con *Condividi…* su Drive, in una mail, su Telegram).
+2. Sul telefono nuovo installa myCimmena e, nella prima schermata, tocca **Ho un backup: ripristinalo** e scegli il file.
+
+L'app ti ricorda di fare un backup se non ne fai uno da 30 giorni (si può spegnere).
+
+### Privacy
+
+- Watchlist, diario, voti, profilo e la tua chiave OMDb restano sul telefono. Non ci sono account né server con i tuoi dati.
+- L'app si collega solo a IMDb (ricerca e locandine), a OMDb (schede complete, con la tua chiave) e a GitHub (aggiornamenti); al server delle segnalazioni solo quando ne mandi una.
+- Nessuna pubblicità, nessuna statistica d'uso. Le notifiche (compleanno e serata) le programma il telefono.
+- Il file di backup contiene anche la chiave OMDb: tienilo per te.
+
+Hai un problema o un'idea? *Impostazioni → Segnalazioni*.
+
+---
+
+# Per chi sviluppa
 
 È nata dal sito del [Club del Cimmena](https://www.clubdelcimmena.it/): vedi [ORIGINE.md](ORIGINE.md). Il piano completo è in [PIANO.md](PIANO.md).
 
@@ -13,7 +96,7 @@ App Android personale per tenere traccia di film e serie visti e da vedere. I da
 - `tools/version.js`: cambia la versione in tutti i file (`npm run set-version -- 1.2.0`).
 - `tools/release.js`: controlla la firma dell'APK di release e lo copia in `dist/`.
 - `server/`: `feedback.php` per le segnalazioni (vedi sotto).
-- `tools/icons.js`: rigenera icona, schermate di avvio e favicon dal logo del Club ricolorato (serve Chrome).
+- `tools/icons.js`: rigenera icona, schermate di avvio e favicon dal logo di myCimmena (`www/assets/logo-my.svg`, serve Chrome).
 - `tools/copy-server.js`: copia `server/` nella repo del sito (`--check` per confrontare).
 
 ## Cosa serve

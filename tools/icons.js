@@ -1,9 +1,9 @@
-// Icona dell'app (PIANO.md, §13 e §18): il rapace del Club ricolorato con la tavolozza "my" (proposta A, "Velluto":
-// rossi velluto su carta crema). Rigenera tutte le immagini da www/assets/logo.svg:
+// Icona dell'app (PIANO.md, §13 e §18): il rapace di myCimmena (proposta A, "Sagoma": la sagoma del rapace del Club
+// semplificata in poche curve, con occhio e taglio del becco vuoti), color carta su rosso velluto.
+// Rigenera tutte le immagini da www/assets/logo-my.svg:
 //   node tools/icons.js
-// - www/assets/logo-my.svg            il rapace ricolorato (usato anche dalle schermate dell'app)
 // - www/assets/favicon/               favicon.svg e web-app-manifest-512x512.png
-// - android/.../mipmap-*/              icona adattiva (primo piano trasparente + sfondo crema), icone classiche e tonde
+// - android/.../mipmap-*/              icona adattiva (primo piano trasparente + sfondo rosso), icone classiche e tonde
 // - android/.../drawable*/splash.png  schermata di avvio fino ad Android 11 (dal 12 la disegna Android con l'icona)
 // Le PNG le disegna Chrome senza finestra (CHROME_PATH, o il percorso standard di Windows) via DevTools Protocol.
 import { spawn } from 'node:child_process';
@@ -15,28 +15,10 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const res = join(root, 'android/app/src/main/res');
 export const PAPER = '#f8f2ef';
-// Rampa dal più scuro al più chiaro: ogni colore del disegno originale prende il posto che gli spetta per luminosità.
-export const STOPS = ['#1c080d', '#4a0f1a', '#8a1f2d', '#c4535a', '#f3c9b8'];
-
-const hex = value => value.replace('#', '').match(/../g).map(part => parseInt(part, 16));
-const toHex = rgb => `#${rgb.map(value => Math.round(Math.max(0, Math.min(255, value))).toString(16).padStart(2, '0')).join('')}`;
-const linear = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
-const lightness = rgb => { const [r, g, b] = rgb.map(linear); const y = 0.2126 * r + 0.7152 * g + 0.0722 * b; return y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y; };
-function ramp(t) {
-	const position = t * (STOPS.length - 1);
-	const index = Math.min(STOPS.length - 2, Math.floor(position));
-	const [a, b] = [hex(STOPS[index]), hex(STOPS[index + 1])];
-	return toHex(a.map((value, i) => value + (b[i] - value) * (position - index)));
-}
-
-export function recolorLogo(svg) {
-	const colors = [...svg.matchAll(/\.(cls-\d+)\{fill:(#[0-9a-f]{6});\}/gi)].map(([, name, value]) => ({ name, value, l: lightness(hex(value)) }));
-	const min = Math.min(...colors.map(color => color.l));
-	const max = Math.max(...colors.map(color => color.l));
-	let out = svg;
-	for (const color of colors) out = out.replace(`.${color.name}{fill:${color.value};}`, `.${color.name}{fill:${ramp((color.l - min) / (max - min))};}`);
-	return out;
-}
+export const VELVET = '#8a1f2d';
+// Nel file il rapace è color inchiostro: per le icone diventa color carta.
+export const INK = '#2b1419';
+export const tintLogo = (svg, color) => svg.replace(INK, color);
 
 // Pagina con il rapace al centro: share = quota del lato corto occupata dal disegno; shape = 'none' | 'square' | 'round'.
 const page = (logo, { background, share, shape = 'none' }) => `<!doctype html><html><head><style>
@@ -53,12 +35,12 @@ function targets(logo) {
 		// Icona adattiva: 108 dp, il disegno dentro la zona sicura (66 dp di diametro).
 		list.push({ file: `mipmap-${density}/ic_launcher_foreground.png`, width: 108 * scale, height: 108 * scale, html: page(logo, { background: 'transparent', share: 0.46 }) });
 		// Icone per i launcher senza icone adattive (Android 7).
-		list.push({ file: `mipmap-${density}/ic_launcher.png`, width: 48 * scale, height: 48 * scale, html: page(logo, { background: PAPER, share: 0.74, shape: 'square' }) });
-		list.push({ file: `mipmap-${density}/ic_launcher_round.png`, width: 48 * scale, height: 48 * scale, html: page(logo, { background: PAPER, share: 0.68, shape: 'round' }) });
+		list.push({ file: `mipmap-${density}/ic_launcher.png`, width: 48 * scale, height: 48 * scale, html: page(logo, { background: VELVET, share: 0.66, shape: 'square' }) });
+		list.push({ file: `mipmap-${density}/ic_launcher_round.png`, width: 48 * scale, height: 48 * scale, html: page(logo, { background: VELVET, share: 0.6, shape: 'round' }) });
 	}
 	const splash = { drawable: [480, 320], 'drawable-land-mdpi': [480, 320], 'drawable-land-hdpi': [800, 480], 'drawable-land-xhdpi': [1280, 720], 'drawable-land-xxhdpi': [1600, 960], 'drawable-land-xxxhdpi': [1920, 1280], 'drawable-port-mdpi': [320, 480], 'drawable-port-hdpi': [480, 800], 'drawable-port-xhdpi': [720, 1280], 'drawable-port-xxhdpi': [960, 1600], 'drawable-port-xxxhdpi': [1280, 1920] };
-	for (const [dir, [width, height]] of Object.entries(splash)) list.push({ file: `${dir}/splash.png`, width, height, html: page(logo, { background: PAPER, share: 0.4 }) });
-	list.push({ file: '../../../../../www/assets/favicon/web-app-manifest-512x512.png', width: 512, height: 512, html: page(logo, { background: PAPER, share: 0.72 }) });
+	for (const [dir, [width, height]] of Object.entries(splash)) list.push({ file: `${dir}/splash.png`, width, height, html: page(logo, { background: VELVET, share: 0.36 }) });
+	list.push({ file: '../../../../../www/assets/favicon/web-app-manifest-512x512.png', width: 512, height: 512, html: page(logo, { background: VELVET, share: 0.64 }) });
 	return list;
 }
 
@@ -99,12 +81,10 @@ async function render(list) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-	const original = readFileSync(join(root, 'www/assets/logo.svg'), 'utf8');
-	const logo = recolorLogo(original);
-	writeFileSync(join(root, 'www/assets/logo-my.svg'), logo);
-	const [, , w, h] = logo.match(/viewBox="([^"]+)"/)[1].split(' ').map(Number);
-	const side = Math.max(w, h) / 0.72;
-	writeFileSync(join(root, 'www/assets/favicon/favicon.svg'), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${side} ${side}"><rect width="${side}" height="${side}" rx="${side * 0.16}" fill="${PAPER}"/><svg x="${(side - w) / 2}" y="${(side - h) / 2}" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${logo.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '')}</svg></svg>`);
-	writeFileSync(join(res, 'values/ic_launcher_background.xml'), `<?xml version="1.0" encoding="utf-8"?>\n<!-- Sfondo dell'icona adattiva: la carta crema del tema "my" (tools/icons.js). -->\n<resources>\n    <color name="ic_launcher_background">${PAPER.toUpperCase()}</color>\n</resources>\n`);
+	const logo = tintLogo(readFileSync(join(root, 'www/assets/logo-my.svg'), 'utf8'), PAPER);
+	const [x, y, w, h] = logo.match(/viewBox="([^"]+)"/)[1].split(' ').map(Number);
+	const side = Math.max(w, h) / 0.66;
+	writeFileSync(join(root, 'www/assets/favicon/favicon.svg'), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${side} ${side}"><rect width="${side}" height="${side}" rx="${side * 0.16}" fill="${VELVET}"/><svg x="${(side - w) / 2}" y="${(side - h) / 2}" width="${w}" height="${h}" viewBox="${x} ${y} ${w} ${h}">${logo.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '')}</svg></svg>`);
+	writeFileSync(join(res, 'values/ic_launcher_background.xml'), `<?xml version="1.0" encoding="utf-8"?>\n<!-- Sfondo dell'icona adattiva e della schermata di avvio: il rosso velluto di myCimmena (tools/icons.js). -->\n<resources>\n    <color name="ic_launcher_background">${VELVET.toUpperCase()}</color>\n</resources>\n`);
 	await render(targets(logo));
 }

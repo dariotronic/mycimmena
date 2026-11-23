@@ -146,6 +146,9 @@ body.modal-open { overflow: hidden; }
 }
 .site-header-actions { display: flex; align-items: center; gap: 8px; }
 .brand { display: inline-flex; align-items: center; text-decoration: none; transition: opacity .18s ease; }
+/* Il rapace di myCimmena (assets/logo-my.svg) come maschera: prende il colore del tema, di giorno e di notte, e
+   l'accento dei colori dal film del cuore. Occhio e taglio del becco sono vuoti e lasciano vedere lo sfondo. */
+.logo-mark { display: inline-block; flex: none; background-color: var(--ink); -webkit-mask: url("assets/logo-my.svg") center / contain no-repeat; mask: url("assets/logo-my.svg") center / contain no-repeat; }
 .brand-logo { width: 46px; height: 46px; }
 .brand:hover { opacity: .8; }
 .theme-toggle { display: inline-grid; width: 62px; height: 42px; place-items: center; padding: 0; border: 0; border-radius: 999px; background: transparent; cursor: pointer; }
@@ -853,7 +856,7 @@ body.modal-open { overflow: hidden; }
   .touch-nav a[aria-current="page"] { color: var(--rust); background: var(--accent-wash-strong); }
   .touch-nav a:focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
   .touch-nav .touch-nav-home { width: 48px; height: 48px; }
-  .touch-nav-home img { display: block; width: 38px; height: 38px; }
+  .touch-nav-home .logo-mark { display: block; width: 34px; height: 34px; }
 }
 
 /* Toast di conferma (assets/js/toasts.js): piccola pillola in basso, non cliccabile, sparisce da sola. */
@@ -881,7 +884,7 @@ body.modal-open { overflow: hidden; }
 /* WebView troppo vecchia (boot.js): solo il messaggio, al centro, con stili semplici che reggono anche lì. */
 .webview-too-old { box-sizing: border-box; display: flex; min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; padding: 32px; text-align: center; }
 .webview-too-old[hidden] { display: none; }
-.webview-too-old img { margin-bottom: 16px; }
+.webview-too-old-logo { width: 96px; height: 96px; margin-bottom: 16px; }
 .webview-too-old h1 { margin: 0 0 12px; font-family: Spectral, serif; font-size: 1.6rem; }
 .webview-too-old p { max-width: 28rem; margin: 0 0 10px; line-height: 1.5; }
 html[data-webview-too-old="true"] .site-shell { display: none; }
@@ -970,7 +973,7 @@ html[data-onboarding="true"] .site-shell { flex: none; min-height: 0; margin: 0;
 .onboarding-step h1 { margin: 0; font-family: Spectral, serif; font-size: clamp(2.2rem, 8vw, 3.4rem); font-weight: 400; line-height: 1.05; outline: none; }
 .onboarding-lead { margin: 0; color: var(--muted); font-size: 1rem; line-height: 1.55; }
 .onboarding-content > p { margin: 0; line-height: 1.6; }
-.onboarding-logo { justify-self: center; width: 120px; height: 120px; margin-top: 4vh; }
+.onboarding-logo { justify-self: center; width: 120px; height: 120px; margin-top: 4vh; background-color: var(--rust); }
 .onboarding-progress { display: flex; gap: 6px; }
 .onboarding-progress span { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
 .onboarding-progress span.active { background: var(--apricot); }

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Sfondo dell'icona adattiva: la carta crema del tema "my" (tools/icons.js). -->
+<!-- Sfondo dell'icona adattiva e della schermata di avvio: il rosso velluto di myCimmena (tools/icons.js). -->
 <resources>
-    <color name="ic_launcher_background">#F8F2EF</color>
+    <color name="ic_launcher_background">#8A1F2D</color>
 </resources>

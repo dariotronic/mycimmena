@@ -78,11 +78,12 @@ function sharePalette() {
 }
 
 // Il logo SVG non dichiara width/height: senza dimensioni alcuni browser non lo disegnano su canvas.
-async function loadShareLogo() {
+// Il rapace di myCimmena nel colore dato (nel file è l'inchiostro #2b1419).
+async function loadShareLogo(color) {
 	try {
-		const response = await fetch('assets/logo.svg');
+		const response = await fetch('assets/logo-my.svg');
 		if (!response.ok) return null;
-		const svg = (await response.text()).replace('<svg ', '<svg width="322" height="315" ');
+		const svg = (await response.text()).replace('<svg ', '<svg width="300" height="305" ').replace('#2b1419', color);
 		const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
 		const image = new Image();
 		await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = url; });
@@ -206,7 +207,7 @@ async function createHomeShareImage(meeting, formatDate, meetingMovies) {
 	const palette = sharePalette();
 	const listedMovies = meetingMovies(meeting);
 	const movies = listedMovies.length ? listedMovies : [{ title: 'Film da definire', year: '', director: '' }];
-	const [posters, logo] = await Promise.all([Promise.all(movies.map(loadSharePoster)), loadShareLogo()]);
+	const [posters, logo] = await Promise.all([Promise.all(movies.map(loadSharePoster)), loadShareLogo(palette.ink)]);
 	const icons = { event: shareIconPaths('event'), place: shareIconPaths('place') };
 	const canvas = document.createElement('canvas');
 	const context = canvas.getContext('2d');
@@ -255,7 +256,7 @@ async function createHomeShareImage(meeting, formatDate, meetingMovies) {
 	drawShareBackground(context, palette, canvas.width, canvas.height);
 
 	// Intestazione: logo, sopratitolo e titolo come in cima alle pagine del sito.
-	if (logo) context.drawImage(logo, margin, headerTop, 84, 82);
+	if (logo) context.drawImage(logo, margin, headerTop, 82, 84);
 	const eyebrowY = headerTop + 112;
 	context.fillStyle = palette.apricot;
 	context.fillRect(margin, eyebrowY + 9, 34, 3);
