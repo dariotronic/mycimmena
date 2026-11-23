@@ -501,7 +501,8 @@ Alla fine della Fase 0 l'app si apre con dati vuoti: ogni modifica risponde "Non
 - [x] Statistiche: riquadri, colonne per mesi, anni e voti, barre per generi e registi, filtro per anno, suggerimenti al tocco e "Vedi come tabella"; un solo colore (l'accento del tema), validato per contrasto in giorno e notte
 - [x] Importazione di diario e voti da Letterboxd (zip o CSV: diario, recensioni come note, voti raddoppiati in spipe, film visti) o IMDb (voti; le serie come voto alla serie), con lo stesso abbinamento della watchlist; le visioni già nel diario (stesso titolo e data) si saltano
 - [x] Aggiornamento dentro l'app (v2) con il plugin Updater
-- [x] Build automatica su GitHub Actions: test a ogni push (`test.yml`), release firmata a ogni tag `vX.Y.Z` (`release.yml`) con le note di `release-notes/X.Y.Z.md`; servono i Secrets della chiave (README)
+- [x] Build automatica su GitHub Actions: test a ogni push (`test.yml`), release firmata a ogni tag `vX.Y.Z` (`release.yml`) con le note di `release-notes/X.Y.Z.md`; Secrets della chiave caricati e provati (avvio a mano: APK firmato da Actions con la stessa impronta della chiave del PC)
+- [x] Release v0.5.0 (dal PC)
 
 ---
 
