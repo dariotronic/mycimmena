@@ -992,7 +992,7 @@ export function createViews(context) {
 					<div>
 						<div class="setting-switch-row">
 							<span id="poster-theme-label">Colori dal film del cuore</span>
-							<button class="setting-switch" type="button" role="switch" aria-checked="${posterThemeOn}" aria-labelledby="poster-theme-label" aria-describedby="poster-theme-help" data-poster-theme><span class="setting-switch-thumb" aria-hidden="true"></span></button>
+							<button class="setting-switch" type="button" role="switch" aria-checked="${posterThemeOn}" aria-labelledby="poster-theme-label" aria-describedby="poster-theme-help" data-poster-theme-switch><span class="setting-switch-thumb" aria-hidden="true"></span></button>
 						</div>
 						<p class="help-text" id="poster-theme-help">${data.favorite
 							? `L’accento e gli altri colori dell’app vengono dalla locandina di ${escapeHtml(movieName(data.favorite))}, di giorno e di notte. Spento, torna il rosso di myCimmena.`

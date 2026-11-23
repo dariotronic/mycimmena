@@ -66,5 +66,17 @@ test('applies the saved palette before the first paint and follows day and night
 	assert.match(read('../www/assets/js/boot.js'), /localStorage\.getItem\('mycimmena-poster-theme'\)/);
 	assert.match(read('../www/assets/js/theme.js'), /new CustomEvent\('colormodechange'/);
 	assert.match(read('../www/style.css'), /background-image:\s*var\(--deco-circles\),\s*var\(--deco-wave\),/);
-	assert.match(read('../www/assets/js/views.js'), /data-poster-theme>/);
+	assert.match(read('../www/assets/js/views.js'), /data-poster-theme-switch>/);
+});
+
+test('binds the settings switch to the button only, never to the page that carries the poster theme', () => {
+	const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
+	// L'attributo sulla pagina e quello dell'interruttore si chiamavano uguali: il gestore finiva su <html> e ogni
+	// tocco, ovunque, riaccendeva i colori (con un toast a raffica e la pagina ridisegnata di continuo).
+	const script = read('../www/script.js');
+	assert.match(script, /document\.querySelector\('button\[data-poster-theme-switch\]'\)/);
+	assert.doesNotMatch(script, /querySelector\('\[data-poster-theme\]'\)/);
+	for (const file of ['../www/assets/js/boot.js', '../www/assets/js/poster-theme-ui.js']) {
+		assert.doesNotMatch(read(file), /dataset\.posterTheme\b(?!Movie)/, file);
+	}
 });

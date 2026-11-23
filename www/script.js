@@ -342,7 +342,7 @@ function bindViewEvents() {
 		statsYear = event.target.value;
 		render();
 	});
-	document.querySelector('[data-poster-theme]')?.addEventListener('click', async event => {
+	document.querySelector('button[data-poster-theme-switch]')?.addEventListener('click', async event => {
 		const on = event.currentTarget.getAttribute('aria-checked') !== 'true';
 		await store.updateKv('settings', { posterTheme: on });
 		await refresh();

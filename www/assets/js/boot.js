@@ -19,7 +19,7 @@
 			for (var name in vars) {
 				if (Object.prototype.hasOwnProperty.call(vars, name)) document.documentElement.style.setProperty(name, vars[name]);
 			}
-			document.documentElement.dataset.posterTheme = posterTheme.movieId;
+			document.documentElement.dataset.posterThemeMovie = posterTheme.movieId;
 		}
 	} catch (error) {
 		console.error('Impossibile leggere i colori del film del cuore.', error);

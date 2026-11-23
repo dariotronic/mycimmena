@@ -56,7 +56,7 @@ export function createPosterTheme({ store, getData }) {
 	function clear() {
 		applied.forEach(name => root.style.removeProperty(name));
 		applied = [];
-		delete root.dataset.posterTheme;
+		delete root.dataset.posterThemeMovie;
 	}
 
 	// Le variabili della modalità in uso (giorno o notte) sopra quelle di style.css.
@@ -66,7 +66,7 @@ export function createPosterTheme({ store, getData }) {
 		const vars = theme[root.dataset.theme === 'night' ? 'night' : 'day'];
 		for (const [name, value] of Object.entries(vars)) root.style.setProperty(name, value);
 		applied = Object.keys(vars);
-		root.dataset.posterTheme = theme.movieId;
+		root.dataset.posterThemeMovie = theme.movieId;
 		if (themeColorMeta) themeColorMeta.content = vars['--paper'];
 	}
 
