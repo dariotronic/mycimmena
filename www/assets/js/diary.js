@@ -78,6 +78,9 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 			document.body.classList.add('modal-open');
 			dialog.showModal();
 		}
+		// La finestra mette il focus sulla croce: in sola lettura non serve (e si vedrebbe il bordo).
+		document.activeElement?.blur?.();
+		dialog.scrollTop = 0;
 	}
 
 	// All'apertura del modulo: nessun campo col focus (niente tastiera), e la finestra scorre fino al primo campo
