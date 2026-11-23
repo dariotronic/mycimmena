@@ -100,7 +100,7 @@ export function buildAppData(state, { posterUrlFor = () => '' } = {}) {
 		onboarding: state?.onboarding || {},
 		meta: state?.meta || {},
 		// Importazione della watchlist lasciata a metà (watchlist-import.js): solo quanto serve alle Impostazioni.
-		importJob: state?.importJob ? { source: state.importJob.source, total: state.importJob.items?.length || 0 } : null,
+		importJob: state?.importJob ? { source: state.importJob.source, kind: state.importJob.kind || 'watchlist', total: state.importJob.items?.length || 0 } : null,
 		favorite: state?.profile?.favoriteMovieId ? movieFor(state.profile.favoriteMovieId) : null,
 		movieById: id => movies.find(movie => movie.id === id) || movieFor(id),
 		seriesOf: id => seriesProgress(state, id)

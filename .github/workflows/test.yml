@@ -1,0 +1,21 @@
+# Test a ogni push e pull request: node --test, compreso feedback.php con il PHP del runner.
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: php -v | head -1
+      - run: npm test

@@ -4,7 +4,7 @@
 // Limiti di GitHub: 60 richieste l'ora per indirizzo IP senza login. Ogni richiesta manda l'ETag dell'ultima
 // risposta (se non c'è niente di nuovo GitHub risponde 304); i controlli automatici si fermano quando ne restano
 // meno di 5, fino all'ora indicata da GitHub. Lo stato sta in meta.updateCheck:
-// { lastAt, etag, latest: { version, notes, url, apkUrl, publishedAt } | null, remaining, resetAt, dismissedVersion, dismissedUntil }
+// { lastAt, etag, latest: { version, notes, url, apkUrl, sha256, size, publishedAt } | null, remaining, resetAt, dismissedVersion, dismissedUntil }
 export const RELEASES_URL = 'https://api.github.com/repos/dariotronic/mycimmena/releases/latest';
 export const HOUR_MS = 60 * 60 * 1000;
 const MANUAL_REPEAT_MS = 30 * 1000;
@@ -29,6 +29,9 @@ export function parseRelease(release) {
 		notes: String(release.body || '').slice(0, 4000),
 		url: https(release.html_url),
 		apkUrl: https(apk?.browser_download_url),
+		// Impronta che GitHub calcola per ogni file allegato ("sha256:…"): il plugin Updater la confronta col download.
+		sha256: /^sha256:[0-9a-f]{64}$/i.test(String(apk?.digest || '')) ? apk.digest.slice(7).toLowerCase() : '',
+		size: Number.isInteger(apk?.size) ? apk.size : 0,
 		publishedAt: String(release.published_at || '')
 	};
 }

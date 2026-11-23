@@ -1,6 +1,9 @@
 // Aggiornamenti nell'interfaccia (PIANO.md, §10): controlli all'apertura, ogni ora e al ritorno in primo piano;
 // avviso "È disponibile myCimmena 1.2.0" con Aggiorna e Più tardi; pallino su Impostazioni; pulsante manuale.
-// v1: "Aggiorna" apre l'APK della Release nel browser, che lo scarica; l'installazione la conferma l'utente.
+// v2 (Fase 5): nell'app Android "Aggiorna" scarica l'APK con il plugin nativo Updater (UpdaterPlugin.java), che
+// controlla impronta, versione e firma, e apre l'installer. La prima volta Android chiede di consentire a
+// myCimmena di installare app: l'avviso porta alla pagina giusta e riprende da solo al ritorno.
+// v1, nel browser o se qualcosa va storto: l'APK si apre nel browser, che lo scarica.
 import { APP_VERSION } from './app-info.js';
 import { escapeHtml } from './domain.js';
 import { openExternal } from './key-setup.js';
@@ -36,16 +39,80 @@ export function createUpdates({ store, getData, refresh, canShowDialog = () => t
 		const notes = document.getElementById('update-dialog-notes');
 		notes.textContent = latest.notes || 'Nessuna nota per questa versione.';
 		document.getElementById('update-dialog-current').textContent = `Hai la versione ${APP_VERSION}.`;
+		setStatus('');
+		installButton.textContent = 'Aggiorna';
+		delete installButton.dataset.mode;
 		if (!dialog.open) dialog.showModal();
 	}
 
-	async function install() {
-		const latest = available();
-		if (!latest) return;
+	const updater = () => (globalThis.Capacitor?.isNativePlatform?.() ? globalThis.Capacitor.Plugins.Updater : null);
+	const installButton = document.getElementById('update-dialog-install');
+	const status = document.getElementById('update-dialog-status');
+	const bar = document.getElementById('update-dialog-progress');
+	let busy = false;
+	let waitingPermission = false;
+
+	function setStatus(text, { progress = null, error = false } = {}) {
+		status.textContent = text;
+		status.classList.toggle('error', error);
+		bar.hidden = progress === null;
+		if (progress !== null) bar.value = progress;
+	}
+
+	async function inBrowser(latest) {
 		dialog.close();
 		await openExternal(latest.apkUrl || latest.url);
 		showToast('updateDownloading');
 	}
+
+	async function install() {
+		const latest = available();
+		if (!latest || busy) return;
+		const plugin = updater();
+		if (!plugin?.download || !latest.apkUrl) return inBrowser(latest);
+		if (installButton.dataset.mode === 'browser') return inBrowser(latest);
+		busy = true;
+		installButton.disabled = true;
+		let listener = null;
+		try {
+			if (!(await plugin.canInstall()).allowed) {
+				waitingPermission = true;
+				setStatus('Android chiede di consentire a myCimmena di installare gli aggiornamenti: nella pagina che si apre attiva l’interruttore, poi torna qui.');
+				installButton.textContent = 'Apri le impostazioni';
+				installButton.dataset.mode = 'settings';
+				await plugin.openInstallSettings();
+				return;
+			}
+			setStatus('Download in corso…', { progress: 0 });
+			listener = await plugin.addListener('progress', ({ done, total }) => {
+				const share = total > 0 ? done / total : 0;
+				setStatus(`Download in corso… ${Math.round(share * 100)}%`, { progress: share });
+			});
+			const { path } = await plugin.download({ url: latest.apkUrl, version: latest.version, sha256: latest.sha256 || '' });
+			setStatus('Download completato: conferma l’installazione nella finestra di Android.', { progress: 1 });
+			await plugin.install({ path });
+		} catch (error) {
+			setStatus(`${error?.message || 'Aggiornamento non riuscito.'} Puoi riprovare, o scaricarlo dal browser.`, { error: true });
+			installButton.textContent = 'Scarica dal browser';
+			installButton.dataset.mode = 'browser';
+		} finally {
+			listener?.remove?.();
+			busy = false;
+			installButton.disabled = false;
+		}
+	}
+
+	// Di ritorno dalla pagina del permesso: se ora è dato, si riparte da soli.
+	document.addEventListener('visibilitychange', async () => {
+		if (document.visibilityState !== 'visible' || !waitingPermission || !dialog.open) return;
+		const plugin = updater();
+		if (plugin && (await plugin.canInstall()).allowed) {
+			waitingPermission = false;
+			installButton.textContent = 'Aggiorna';
+			delete installButton.dataset.mode;
+			install();
+		}
+	});
 
 	async function later() {
 		dialog.close();
@@ -88,7 +155,10 @@ export function createUpdates({ store, getData, refresh, canShowDialog = () => t
 		});
 	}
 
-	document.getElementById('update-dialog-install').addEventListener('click', install);
+	installButton.addEventListener('click', () => {
+		if (installButton.dataset.mode === 'settings') updater()?.openInstallSettings();
+		else install();
+	});
 	document.getElementById('update-dialog-later').addEventListener('click', later);
 	dialog.addEventListener('cancel', event => {
 		event.preventDefault();

@@ -33,6 +33,8 @@ import { createImportUi } from './assets/js/import-ui.js';
 import { createUpdates } from './assets/js/update-ui.js';
 import { createFeedbackUi } from './assets/js/feedback-ui.js';
 import { createNotifications } from './assets/js/notifications.js';
+import { renderStats } from './assets/js/stats-ui.js';
+import { pageHeader } from './assets/js/components.js';
 
 hydrateIcons(document);
 
@@ -226,7 +228,9 @@ async function updateNotifyStatus() {
 	status.textContent = state === 'denied' ? 'Android blocca le notifiche di myCimmena: riattivale da Impostazioni di Android → App → myCimmena → Notifiche.' : '';
 }
 
-const ROUTE_TITLES = { home: 'Home', calendario: 'Serata', diario: 'Diario', prossimi: 'Randomizer', lista: 'Watchlist', impostazioni: 'Impostazioni', informazioni: 'Informazioni' };
+const ROUTE_TITLES = { home: 'Home', calendario: 'Serata', diario: 'Diario', statistiche: 'Statistiche', prossimi: 'Randomizer', lista: 'Watchlist', impostazioni: 'Impostazioni', informazioni: 'Informazioni' };
+// Anno scelto nelle statistiche ('' = tutto il diario).
+let statsYear = '';
 // Nomi delle pagine sul sito: un link salvato porta comunque alla pagina giusta.
 const OLD_ROUTES = { profilo: 'impostazioni', archivio: 'diario' };
 
@@ -240,6 +244,7 @@ function render() {
 		home: viewRenderer.renderHome,
 		calendario: viewRenderer.renderCalendar,
 		diario: viewRenderer.renderDiary,
+		statistiche: () => `${pageHeader('Statistiche', 'Il tuo diario in numeri.')}<div class="stats-page">${renderStats(data, { year: statsYear, today: today(), formatDate })}</div>`,
 		prossimi: viewRenderer.renderComingFilms,
 		lista: viewRenderer.renderMovieList,
 		impostazioni: viewRenderer.renderSettings,
@@ -316,13 +321,17 @@ function bindViewEvents() {
 		if (on) askNotifications();
 	}));
 	updateNotifyStatus();
+	document.querySelector('[data-stats-year]')?.addEventListener('change', event => {
+		statsYear = event.target.value;
+		render();
+	});
 	document.querySelector('[data-backup-reminder]')?.addEventListener('click', async event => {
 		const on = event.currentTarget.getAttribute('aria-checked') !== 'true';
 		await store.updateKv('settings', { backupReminder: on });
 		await refresh();
 		showToast('backupReminderChanged', { on });
 	});
-	document.querySelector('[data-open-import]')?.addEventListener('click', () => importer.open());
+	document.querySelectorAll('[data-open-import]').forEach(button => button.addEventListener('click', () => importer.open({ kind: button.dataset.openImport || 'watchlist' })));
 }
 
 // Cambio di vista accessibile: <main> non è una regione aria-live (lo screen reader rileggerebbe tutta la pagina

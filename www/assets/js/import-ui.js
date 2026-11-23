@@ -1,11 +1,36 @@
-// Finestra "Importa watchlist" (PIANO.md, §9): come scaricare il file da Letterboxd o IMDb, scelta del file,
-// abbinamento con l'indicatore "Abbinamento 34/120", riepilogo con i titoli da controllare, salvataggio.
-// Si può chiudere a metà: il lavoro resta salvato e alla riapertura si riprende.
+// Finestra dell'importazione (PIANO.md, §9 e Fase 5), per la watchlist (kind 'watchlist') o per diario e voti
+// (kind 'diary', history-import.js): come scaricare il file da Letterboxd o IMDb, scelta del file, abbinamento con
+// l'indicatore "Abbinamento 34/120", riepilogo con i titoli da controllare, salvataggio.
+// Si può chiudere a metà: il lavoro resta salvato (con il suo kind) e alla riapertura si riprende.
 import { escapeHtml, movieName } from './domain.js';
 import { searchImdb } from './imdb.js';
 import { hydrateIcons } from './icons.js';
 import { showErrorToast, showToast } from './toasts.js';
 import { createJob, IMPORT_SOURCES, jobSummary, moviesToImport, readWatchlistFile, resolveDoubt, runMatching } from './watchlist-import.js';
+import { readHistoryFile, viewingCount, viewingsToImport } from './history-import.js';
+
+// Passaggi per scaricare diario e voti.
+export const historyHowTo = () => `
+	<div class="onboarding-import">
+		<section>
+			<h2>Letterboxd</h2>
+			<ol>
+				<li>Apri letterboxd.com dal browser (nell'app di Letterboxd l'esportazione non c'è).</li>
+				<li>Impostazioni → scheda <strong>Data</strong> → <strong>Export your data</strong>.</li>
+				<li>Dai lo <code>.zip</code> a myCimmena così com'è: prende diario, recensioni, voti e film visti.</li>
+			</ol>
+		</section>
+		<section>
+			<h2>IMDb</h2>
+			<ol>
+				<li>Apri imdb.com e la pagina <strong>Your Ratings</strong> (i tuoi voti).</li>
+				<li>Menu <strong>⋯</strong> → <strong>Export</strong>.</li>
+				<li>Dalla pagina <strong>Your exports</strong> scarica il file <code>.csv</code> quando è pronto.</li>
+			</ol>
+		</section>
+	</div>
+	<p class="help-text">Ogni visione entra nel diario con la sua data e il suo voto (le stelle di Letterboxd raddoppiate: 3½ stelle = 7 spipe). Le visioni già nel diario con lo stesso titolo e la stessa data si saltano.</p>
+`;
 
 // Passaggi per scaricare il file, uguali nell'onboarding e qui.
 export const importHowTo = () => `
@@ -38,7 +63,15 @@ const candidateButton = (item, candidate) => `
 	</button>
 `;
 
-export function renderImportBody({ job, phase, progress = null, error = '' }) {
+export function renderImportBody({ job, phase, progress = null, error = '', kind = 'watchlist' }) {
+	if (!job && kind === 'diary') {
+		return `
+			<p>Porta in myCimmena il diario e i voti di Letterboxd o IMDb. Prima scarica il file dal sito:</p>
+			${historyHowTo()}
+			<label class="button file-button">Scegli il file (.zip o .csv)<input type="file" accept="${FILE_ACCEPT}" data-import-file></label>
+			${error ? `<p class="status-message error" role="alert">${escapeHtml(error)}</p>` : ''}
+		`;
+	}
 	if (!job) {
 		return `
 			<p>Porta in myCimmena i film da vedere salvati su Letterboxd o IMDb. Prima scarica il file dal sito:</p>
@@ -52,7 +85,7 @@ export function renderImportBody({ job, phase, progress = null, error = '' }) {
 	if (phase === 'matching' || summary.pending) {
 		const done = progress?.done ?? summary.total - summary.pending;
 		return `
-			<p>Watchlist di ${escapeHtml(source)}${job.fileName ? ` (${escapeHtml(job.fileName)})` : ''}: cerco ogni titolo su IMDb.</p>
+			<p>${job.kind === 'diary' ? 'Diario' : 'Watchlist'} di ${escapeHtml(source)}${job.fileName ? ` (${escapeHtml(job.fileName)})` : ''}: cerco ogni titolo su IMDb.</p>
 			<div class="import-progress">
 				<progress max="${summary.total}" value="${done}"></progress>
 				<p role="status">Abbinamento ${done}/${summary.total}</p>
@@ -70,6 +103,8 @@ export function renderImportBody({ job, phase, progress = null, error = '' }) {
 	const parts = [`${summary.matched} ${summary.matched === 1 ? 'trovato' : 'trovati'}`];
 	if (summary.doubts) parts.push(`${summary.doubts} da controllare`);
 	if (summary.duplicates) parts.push(`${summary.duplicates} già nella tua watchlist`);
+	const diary = job.kind === 'diary';
+	const count = diary ? viewingCount(job) : matched.length;
 	if (summary.skipped) parts.push(`${summary.skipped} ${summary.skipped === 1 ? 'saltato' : 'saltati'}`);
 	return `
 		<p class="import-summary"><strong>${escapeHtml(parts.join(', '))}.</strong></p>
@@ -95,7 +130,7 @@ export function renderImportBody({ job, phase, progress = null, error = '' }) {
 			</details>
 		` : ''}
 		<div class="button-row">
-			${matched.length ? `<button class="button" type="button" data-import-commit>Importa ${matched.length} ${matched.length === 1 ? 'titolo' : 'titoli'}</button>` : ''}
+			${matched.length ? `<button class="button" type="button" data-import-commit>Importa ${diary ? `${count} ${count === 1 ? 'visione' : 'visioni'}` : `${count} ${count === 1 ? 'titolo' : 'titoli'}`}</button>` : ''}
 			<button class="text-button" type="button" data-import-discard>Annulla l’importazione</button>
 		</div>
 		${doubts.length && matched.length ? '<p class="help-text">I titoli da controllare che non scegli restano fuori.</p>' : ''}
@@ -111,19 +146,25 @@ export function createImportUi({ store, getData, refresh, askConfirmation, onImp
 	let error = '';
 	let stopRequested = false;
 	let onDone = () => {};
+	let kind = 'watchlist';
 
-	const watchlistIds = () => new Set((getData().movies || []).map(movie => movie.id));
+	// Per il diario i titoli già nella watchlist non sono doppioni: contano le visioni.
+	const watchlistIds = () => (kind === 'diary' ? new Set() : new Set((getData().movies || []).map(movie => movie.id)));
+	const title = document.getElementById('import-title');
 
 	function draw() {
-		body.innerHTML = renderImportBody({ job, phase, progress, error });
+		title.textContent = kind === 'diary' ? 'Importa diario e voti' : 'Importa watchlist';
+		body.innerHTML = renderImportBody({ job, phase, progress, error, kind });
 		hydrateIcons(body);
 	}
 
 	// afterImport: per l'onboarding, che passa al passaggio successivo quando l'importazione è finita.
-	async function open({ afterImport = () => {} } = {}) {
+	// Un'importazione lasciata a metà si riprende, qualunque sia il suo tipo.
+	async function open({ afterImport = () => {}, kind: wanted = 'watchlist' } = {}) {
 		onDone = afterImport;
 		error = '';
 		if (phase !== 'matching') job = await store.getImportJob();
+		kind = job?.kind || wanted;
 		draw();
 		if (!dialog.open) dialog.showModal();
 	}
@@ -164,8 +205,8 @@ export function createImportUi({ store, getData, refresh, askConfirmation, onImp
 	async function chooseFile(file) {
 		error = '';
 		try {
-			const parsed = await readWatchlistFile(file);
-			job = createJob(parsed, { fileName: file.name, watchlistIds: watchlistIds() });
+			const parsed = kind === 'diary' ? await readHistoryFile(file) : await readWatchlistFile(file);
+			job = { ...createJob(parsed, { fileName: file.name, watchlistIds: watchlistIds() }), kind };
 			await store.saveImportJob(job);
 		} catch (problem) {
 			job = null;
@@ -177,6 +218,18 @@ export function createImportUi({ store, getData, refresh, askConfirmation, onImp
 	}
 
 	async function commit() {
+		if (job.kind === 'diary') {
+			const result = await store.importViewings(viewingsToImport(job));
+			const ids = job.items.filter(item => item.status === 'matched').map(item => item.movie.id);
+			await store.clearImportJob();
+			job = null;
+			await refresh();
+			dialog.close();
+			showToast('diaryImported', result);
+			onImported(ids);
+			onDone();
+			return;
+		}
 		const movies = moviesToImport(job);
 		const added = await store.addToWatchlist(movies);
 		await store.clearImportJob();

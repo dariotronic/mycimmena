@@ -296,6 +296,7 @@ export function createViews(context) {
 		}
 		return `
 			${header}
+			<p class="diary-stats-link"><a class="button secondary" href="#statistiche">${icon('bar_chart')} Le tue statistiche</a></p>
 			<section class="archive-search-area">
 				<form id="diary-search-form" class="search-bar" role="search" autocomplete="off">
 					<div class="search-input-wrap">
@@ -910,9 +911,13 @@ export function createViews(context) {
 				</div>
 				<div class="profile-setting-row settings-import">
 					<div>
-						<p class="field-label">Importa watchlist</p>
-						<span>${data.importJob ? `Importazione da ${escapeHtml(IMPORT_SOURCES[data.importJob.source] || '')} lasciata a metà` : 'Da Letterboxd o IMDb'}</span>
-						<div class="button-row"><button class="button secondary" type="button" data-open-import>${data.importJob ? 'Riprendi l’importazione' : 'Importa watchlist'}</button></div>
+						<p class="field-label">Importa da Letterboxd o IMDb</p>
+						<span>${data.importJob ? `Importazione ${data.importJob.kind === 'diary' ? 'del diario' : 'della watchlist'} da ${escapeHtml(IMPORT_SOURCES[data.importJob.source] || '')} lasciata a metà` : 'Watchlist, diario e voti da Letterboxd o IMDb'}</span>
+						<div class="button-row">
+							${data.importJob
+								? '<button class="button secondary" type="button" data-open-import>Riprendi l’importazione</button>'
+								: '<button class="button secondary" type="button" data-open-import="watchlist">Importa watchlist</button><button class="button secondary" type="button" data-open-import="diary">Importa diario e voti</button>'}
+						</div>
 					</div>
 				</div>
 				<div class="profile-setting-row settings-notifications">

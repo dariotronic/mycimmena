@@ -1,6 +1,7 @@
 const iconMap = Object.freeze({
 	add: 'add',
 	archive: 'archive',
+	bar_chart: 'bar_chart',
 	add_comment: 'add_comment',
 	arrow_downward: 'arrow_downward',
 	arrow_upward: 'arrow_upward',

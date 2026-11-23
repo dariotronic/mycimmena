@@ -74,6 +74,21 @@ Gli APK di release si firmano sempre con **la stessa chiave**: se si perde, gli 
 
 ## Pubblicare una release
 
+### Con GitHub Actions (consigliato)
+
+1. `npm run set-version -- X.Y.Z` e `npm test`.
+2. Scrivi le note in `release-notes/X.Y.Z.md` (in italiano: l'app le mostra nell'avviso di aggiornamento).
+3. Commit e push, poi il tag: `git tag vX.Y.Z` e `git push origin vX.Y.Z`.
+4. Il workflow `release.yml` esegue i test, compila e firma l'APK e pubblica la Release con l'allegato.
+
+Servono due Secrets nella repo myCimmena (Settings → Secrets and variables → Actions):
+- `MYCIMMENA_KEYSTORE_BASE64`: il file `mycimmena-release.jks` in base64 (PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.mycimmena\mycimmena-release.jks"))`);
+- `MYCIMMENA_KEYSTORE_PASSWORD`: la password che sta in `keystore.properties`.
+
+Senza i Secrets il workflow non compila (lo dice con un avviso, senza segnare errore) e si pubblica da PC, come sotto.
+
+### Da PC
+
 1. `npm run set-version -- X.Y.Z`, `npm test`, commit.
 2. APK firmato:
    ```powershell

@@ -407,6 +407,33 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		await transaction('viewings', 'readwrite', ({ viewings }) => request(viewings.delete(id)));
 	}
 
+	// Diario importato da Letterboxd o IMDb (history-import.js): [{ movie, viewings: [{ date, rating, notes, scope?, round? }] }].
+	// I titoli entrano nel catalogo (non nella watchlist); una visione con lo stesso titolo, la stessa data e lo stesso
+	// tipo di una già nel diario si salta, così importare due volte lo stesso file non crea doppioni.
+	async function importViewings(list) {
+		const prepared = list.map(({ movie, viewings }) => ({ movie: normalizeMovie(movie), viewings: viewings.map(viewing => ({ ...viewing })) }));
+		return transaction(['movies', 'viewings'], 'readwrite', async ({ movies, viewings: store }) => {
+			let added = 0;
+			let skipped = 0;
+			for (const { movie, viewings } of prepared) {
+				const known = await request(movies.get(movie.id));
+				await request(movies.put(known ? { ...known, ...movie, details: known.details || movie.details, detailsFetchedAt: known.detailsFetchedAt || movie.detailsFetchedAt, seasons: known.seasons || movie.seasons } : movie));
+				const existing = await request(store.index('movieId').getAll(movie.id));
+				for (const input of viewings) {
+					if (existing.some(viewing => viewing.date === input.date && (viewing.scope || null) === (input.scope || null))) {
+						skipped += 1;
+						continue;
+					}
+					const viewing = normalizeViewing({ ...input, movieId: movie.id });
+					await request(store.put(viewing));
+					existing.push(viewing);
+					added += 1;
+				}
+			}
+			return { added, skipped };
+		});
+	}
+
 	// Importazione della watchlist in corso (watchlist-import.js): si salva per poterla riprendere.
 	async function getImportJob() {
 		return transaction('kv', 'readonly', ({ kv }) => getKv(kv, 'import'));
@@ -493,7 +520,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 
 	return {
 		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, setSeriesStatus, restartSeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
-		addViewing, updateViewing, deleteViewing, getPoster, savePoster, posterIds, requestPersistence, getImportJob, saveImportJob, clearImportJob, exportData, restoreData, STORES
+		addViewing, updateViewing, deleteViewing, getPoster, savePoster, posterIds, requestPersistence, importViewings, getImportJob, saveImportJob, clearImportJob, exportData, restoreData, STORES
 	};
 }
 

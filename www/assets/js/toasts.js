@@ -50,6 +50,7 @@ export const TOASTS = {
 	backupReminderChanged: { enabled: true, message: ({ on }) => on ? 'Promemoria del backup attivo' : 'Promemoria del backup spento' },
 	backupReminder: { enabled: true, message: 'È da un po’ che non fai un backup: i dati stanno solo su questo telefono.' },
 	importMatched: { enabled: true, message: 'Abbinamento finito: apri Impostazioni → Importa watchlist per il riepilogo' },
+	diaryImported: { enabled: true, duration: 4000, message: ({ added, skipped }) => `${added === 1 ? '1 visione aggiunta' : `${added} visioni aggiunte`} al diario${skipped ? ` (${skipped} già c’erano)` : ''}` },
 	watchlistImported: { enabled: true, message: ({ count }) => count === 1 ? '1 titolo importato nella watchlist' : `${count} titoli importati nella watchlist` },
 
 	// Segnalazioni e notifiche

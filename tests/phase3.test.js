@@ -253,7 +253,9 @@ test('compares versions and reads the GitHub release', () => {
 	assert.ok(compareVersions('1.10.0', '1.2.0') > 0);
 	assert.ok(compareVersions('v0.3.0', '0.3.0') === 0);
 	assert.ok(compareVersions('0.2.9', '0.3.0') < 0);
-	assert.deepEqual(parseRelease(release), { version: '0.4.0', notes: 'Novità', url: release.html_url, apkUrl: release.assets[0].browser_download_url, publishedAt: '2026-12-01T00:00:00Z' });
+	assert.deepEqual(parseRelease(release), { version: '0.4.0', notes: 'Novità', url: release.html_url, apkUrl: release.assets[0].browser_download_url, sha256: '', size: 0, publishedAt: '2026-12-01T00:00:00Z' });
+	const withDigest = parseRelease({ ...release, assets: [{ ...release.assets[0], size: 4096, digest: `sha256:${'AB'.repeat(32)}` }] });
+	assert.deepEqual([withDigest.sha256, withDigest.size], ['ab'.repeat(32), 4096]);
 	assert.equal(parseRelease({ tag_name: 'nightly' }), null);
 	assert.equal(parseRelease({ ...release, assets: [{ name: 'x.apk', browser_download_url: 'https://evil.example/x.apk' }] }).apkUrl, '');
 });

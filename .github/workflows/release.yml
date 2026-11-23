@@ -1,0 +1,101 @@
+# Release automatica (PIANO.md, §10 e Fase 5): a ogni tag vX.Y.Z compila l'APK, lo firma con la chiave di
+# release e lo pubblica come Release di GitHub, con le note di release-notes/X.Y.Z.md.
+#
+# Secrets richiesti (Settings → Secrets and variables → Actions della repo myCimmena):
+#   MYCIMMENA_KEYSTORE_BASE64    il file mycimmena-release.jks in base64
+#   MYCIMMENA_KEYSTORE_PASSWORD  la password (la stessa per il keystore e per la chiave, alias mycimmena)
+# Senza i Secrets il workflow non compila e lo dice con un avviso (senza fallire): la release si fa da PC
+# (README, "Pubblicare una release"), e anche il tag creato da PC non produce un errore qui.
+#
+# Per pubblicare: npm run set-version -- X.Y.Z, scrivi release-notes/X.Y.Z.md, commit, poi
+#   git tag vX.Y.Z && git push origin vX.Y.Z
+
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Controlla versione, note e Secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MYCIMMENA_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.MYCIMMENA_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$version" != "$pkg" ]; then echo "::error::Il tag $GITHUB_REF_NAME non corrisponde a package.json ($pkg)"; exit 1; fi
+          if [ ! -s "release-notes/$version.md" ]; then echo "::error::Mancano le note: release-notes/$version.md"; exit 1; fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::notice::Mancano i Secrets MYCIMMENA_KEYSTORE_BASE64 e MYCIMMENA_KEYSTORE_PASSWORD: niente build qui, la release si pubblica da PC."
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/setup-node@v5
+        if: env.SKIP != 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        if: env.SKIP != 'true'
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+        if: env.SKIP != 'true'
+      - run: npm test
+        if: env.SKIP != 'true'
+
+      - name: Chiave di firma (solo nel runner, cancellata alla fine)
+        if: env.SKIP != 'true'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MYCIMMENA_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.MYCIMMENA_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/signing"
+          mkdir -p "$dir"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$dir/mycimmena-release.jks"
+          printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=mycimmena\nkeyPassword=%s\n' "$dir/mycimmena-release.jks" "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" > "$dir/keystore.properties"
+          echo "MYCIMMENA_SIGNING=$dir/keystore.properties" >> "$GITHUB_ENV"
+
+      - name: APK firmato
+        if: env.SKIP != 'true'
+        run: |
+          set -euo pipefail
+          npx cap sync android
+          (cd android && ./gradlew assembleRelease --no-daemon)
+          node tools/release.js
+
+      - name: Pubblica la Release
+        if: env.SKIP != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          apk="dist/mycimmena-$VERSION.apk"
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$apk" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$apk" --title "myCimmena $VERSION" --notes-file "release-notes/$VERSION.md" --verify-tag
+          fi
+
+      - name: Cancella la chiave dal runner
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/signing"
