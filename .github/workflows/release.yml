@@ -15,6 +15,8 @@ name: Release
 on:
   push:
     tags: ['v*.*.*']
+  # Avvio a mano (scheda Actions → Release → Run workflow): prova di build e firma con i Secrets, senza pubblicare.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -36,8 +38,9 @@ jobs:
           KEYSTORE_PASSWORD: ${{ secrets.MYCIMMENA_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
           pkg=$(node -p "require('./package.json').version")
+          version="${GITHUB_REF_NAME#v}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then version="$pkg"; fi
           if [ "$version" != "$pkg" ]; then echo "::error::Il tag $GITHUB_REF_NAME non corrisponde a package.json ($pkg)"; exit 1; fi
           if [ ! -s "release-notes/$version.md" ]; then echo "::error::Mancano le note: release-notes/$version.md"; exit 1; fi
           echo "VERSION=$version" >> "$GITHUB_ENV"
@@ -84,7 +87,7 @@ jobs:
           node tools/release.js
 
       - name: Pubblica la Release
-        if: env.SKIP != 'true'
+        if: env.SKIP != 'true' && github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

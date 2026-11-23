@@ -85,6 +85,8 @@ Servono due Secrets nella repo myCimmena (Settings → Secrets and variables →
 - `MYCIMMENA_KEYSTORE_BASE64`: il file `mycimmena-release.jks` in base64 (PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$env:USERPROFILE\.mycimmena\mycimmena-release.jks"))`);
 - `MYCIMMENA_KEYSTORE_PASSWORD`: la password che sta in `keystore.properties`.
 
+Per provare i Secrets senza pubblicare: scheda Actions → Release → Run workflow (compila e firma la versione di `package.json`, poi si ferma).
+
 Senza i Secrets il workflow non compila (lo dice con un avviso, senza segnare errore) e si pubblica da PC, come sotto.
 
 ### Da PC
