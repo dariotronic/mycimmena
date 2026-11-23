@@ -893,6 +893,11 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .viewing-form .field label span, .viewing-form legend span { text-transform: none; letter-spacing: 0; font-weight: 500; }
 .rating-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 .rating-row .text-button { font-size: .8rem; }
+/* "Elimina" della visione: in fondo, staccato dai pulsanti del modulo. */
+.viewing-delete-zone { display: grid; gap: 4px; justify-items: start; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.viewing-delete-zone .text-button { display: inline-flex; align-items: center; gap: 6px; color: var(--error-color); font-size: .85rem; }
+.viewing-delete-zone .material-icons-outlined { font-size: 18px; }
+.viewing-delete-zone .help-text { margin: 0; font-size: .78rem; }
 .viewing-remove-watchlist { display: flex; align-items: center; gap: 12px; color: var(--ink); font-size: .9rem; font-weight: 600; cursor: pointer; }
 .viewing-form .review-form-actions { flex-wrap: wrap; }
 .movie-info-viewings { display: grid; gap: 10px; margin-top: 22px; }

@@ -134,7 +134,10 @@ test('renders the viewing form with optional rating, notes and the watchlist swi
 	assert.match(edit, /name="date" type="date" required value="2026-11-20"/);
 	assert.match(edit, /<input type="hidden" name="rating" value="9.5">/);
 	assert.match(edit, /value="Anna"/);
-	assert.match(edit, /class="button secondary viewing-delete"/);
+	// "Elimina" è separato da Salva e Annulla e dice che toglie tutta la visione, non solo la nota.
+	assert.match(edit, /<\/div>\s*<div class="viewing-delete-zone">\s*<button class="text-button viewing-delete" type="button" data-confirm="Eliminare dal diario la visione del [^"]+, con voto e note\?">/);
+	assert.match(edit, /Elimina questa visione dal diario<\/span>/);
+	assert.match(edit, /Per cancellare solo la nota, svuotala e salva\./);
 	assert.doesNotMatch(edit, /removeFromWatchlist/);
 });
 

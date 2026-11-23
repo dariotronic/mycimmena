@@ -463,10 +463,27 @@ export function createViews(context) {
 				` : ''}
 				<div class="button-row review-form-actions">
 					<button class="button" type="submit">Salva</button>
-					${viewing ? '<button class="button secondary viewing-delete" type="button">Elimina</button>' : ''}
 					<button class="button secondary viewing-cancel" type="button">Annulla</button>
 				</div>
+				${viewing ? deleteZone(viewing) : ''}
 			</form>
+		`;
+	}
+
+	// "Elimina" cancella tutta la visione, non solo la nota: sta in fondo, separato da Salva e Annulla, e dice
+	// esattamente cosa toglie dal diario.
+	function deleteZone(viewing) {
+		const date = formatDate(viewing.date);
+		const [label, help, question] = viewing.scope === 'episodes'
+			? ['Elimina questa visione degli episodi', `Toglie dal diario la visione del ${date} con gli episodi ${viewing.label || ''}, che tornano da vedere.`, `Eliminare dal diario la visione del ${date}? Gli episodi ${viewing.label || ''} tornano da vedere.`]
+			: viewing.scope === 'season' || viewing.scope === 'series'
+				? ['Elimina questo voto', 'Toglie dal diario il voto con la sua nota.', 'Eliminare questo voto dal diario, con la sua nota?']
+				: ['Elimina questa visione dal diario', `Toglie dal diario tutta la visione del ${date}, con voto e note.`, `Eliminare dal diario la visione del ${date}, con voto e note?`];
+		return `
+			<div class="viewing-delete-zone">
+				<button class="text-button viewing-delete" type="button" data-confirm="${escapeHtml(question)}">${icon('delete')}<span>${escapeHtml(label)}</span></button>
+				<p class="help-text">${escapeHtml(help)} Per cancellare solo la nota, svuotala e salva.</p>
+			</div>
 		`;
 	}
 

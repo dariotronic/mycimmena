@@ -96,7 +96,8 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 	}
 
 	async function deleteViewing(target) {
-		if (!(await askConfirmation('Eliminare questa visione dal diario?'))) return;
+		const question = target.querySelector('.viewing-delete')?.dataset.confirm || 'Eliminare questa visione dal diario?';
+		if (!(await askConfirmation(question))) return;
 		try {
 			await store.deleteViewing(target.dataset.viewingId);
 			await closeDialog({ confirm: false });
