@@ -301,13 +301,13 @@ async function createHomeShareImage(meeting, formatDate, meetingMovies) {
 		rowTop += row.height + rowGap;
 	});
 
-	// Piè di pagina come quello del sito: filetto e testo maiuscoletto.
+	// Piè di pagina: filetto e il nome dell'app in maiuscoletto, con l'anno della serata.
 	const footerY = canvas.height - footerHeight + 40;
 	context.fillStyle = palette.line;
 	context.fillRect(margin, footerY, contentWidth, 2);
 	context.fillStyle = palette.muted;
 	setShareFont(context, '700 18px Montserrat, sans-serif', 3);
-	context.fillText('CLUB DEL CIMMENA', margin, footerY + 30);
+	context.fillText('MYCIMMENA', margin, footerY + 30);
 	const year = String(meeting.date || '').slice(0, 4) || String(new Date().getFullYear());
 	context.textAlign = 'right';
 	context.fillText(year, width - margin, footerY + 30);

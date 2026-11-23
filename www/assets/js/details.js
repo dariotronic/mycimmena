@@ -88,6 +88,7 @@ export function createDetails({ store, getState, onChange = () => {}, onProgress
 		(async () => {
 			let done = 0;
 			let total = queue.length;
+			let stopped = false;
 			try {
 				while (queue.length && completedThisSession < COMPLETION_MAX_PER_SESSION && mode() === 'full' && !paused()) {
 					total = Math.max(total, done + queue.length);
@@ -99,16 +100,26 @@ export function createDetails({ store, getState, onChange = () => {}, onProgress
 							completedThisSession += 1;
 						} catch (error) {
 							if (error instanceof OmdbError && error.kind === 'not-found') await store.saveDetails(id, { notFound: true });
-							else if (await handleError(error)) break;
+							else if (await handleError(error)) {
+								stopped = true;
+								break;
+							}
 						}
 						done += 1;
 						if (queue.length) await wait(COMPLETION_INTERVAL_MS);
 					}
 				}
 			} finally {
-				running = false;
 				onProgress(null);
-				if (done) await onChange();
+				// "In corso" finisce solo dopo aver riletto i dati: prima chi aspettava la fine trovava ancora i dati vecchi
+				// (e il test sul completamento falliva una volta ogni tanto). I titoli arrivati nel frattempo ripartono, a meno
+				// che il giro non si sia fermato per un errore (rete, chiave, limite): quelli aspettano il prossimo avvio.
+				try {
+					if (done) await onChange();
+				} finally {
+					running = false;
+					if (!stopped && queue.length && completedThisSession < COMPLETION_MAX_PER_SESSION) complete([]);
+				}
 			}
 		})();
 	}

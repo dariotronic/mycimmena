@@ -186,3 +186,9 @@ test('opens the phone calendar and the Android share menu instead of downloading
 	assert.match(share, /plugins\.Filesystem\.writeFile\(\{ path: fileName, data: await blobToBase64\(blob\), directory: 'CACHE' \}\)/);
 	assert.match(share, /plugins\.Share\.share\(\{ title: 'La prossima serata', files: \[uri\]/);
 });
+
+test('signs the shared evening image as myCimmena, not as the Club', () => {
+	const share = readFileSync(new URL('../www/assets/js/share.js', import.meta.url), 'utf8');
+	assert.match(share, /context\.fillText\('MYCIMMENA', margin, footerY \+ 30\)/);
+	assert.doesNotMatch(share, /CLUB DEL CIMMENA/);
+});
