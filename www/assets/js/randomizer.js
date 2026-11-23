@@ -350,5 +350,6 @@ export function createRandomizer({ render, viewRenderer, selectableMovies, sched
 		});
 	}
 
-	return { getSelectedMovieId: () => selectedMovieId, getState, clearSelectedMovie, bind };
+	// isSpinning: i rulli stanno girando (script.js non ridisegna la pagina in sottofondo, che rimpiazzerebbe la slot).
+	return { getSelectedMovieId: () => selectedMovieId, getState, clearSelectedMovie, bind, isSpinning: () => Boolean(rouletteTimer) };
 }

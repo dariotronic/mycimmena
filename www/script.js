@@ -278,13 +278,14 @@ function render() {
 	updateBackToTopButton();
 }
 
-// Ridisegno in sottofondo (locandine appena salvate): non mentre si scrive o con una finestra aperta, e alla stessa
-// altezza della pagina.
+// Ridisegno in sottofondo (locandine appena salvate, schede da OMDb): non mentre si scrive, con una finestra aperta o
+// mentre girano i rulli del randomizer (il ridisegno rimpiazzerebbe la slot a metà giro), e alla stessa altezza della pagina.
 let renderPending = false;
 function userIsBusy() {
 	const active = document.activeElement;
 	return Boolean(document.querySelector('dialog[open]'))
-		|| Boolean(active?.closest?.('input, textarea, select, [contenteditable="true"]'));
+		|| Boolean(active?.closest?.('input, textarea, select, [contenteditable="true"]'))
+		|| randomizer.isSpinning();
 }
 function renderWhenIdle() {
 	if (userIsBusy()) {

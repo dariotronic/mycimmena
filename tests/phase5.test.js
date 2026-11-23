@@ -192,3 +192,9 @@ test('signs the shared evening image as myCimmena, not as the Club', () => {
 	assert.match(share, /context\.fillText\('MYCIMMENA', margin, footerY \+ 30\)/);
 	assert.doesNotMatch(share, /CLUB DEL CIMMENA/);
 });
+
+test('does not redraw the page in the background while the randomizer reels are spinning', () => {
+	const script = readFileSync(new URL('../www/script.js', import.meta.url), 'utf8');
+	assert.match(script, /\|\| randomizer\.isSpinning\(\);/);
+	assert.match(readFileSync(new URL('../www/assets/js/randomizer.js', import.meta.url), 'utf8'), /isSpinning: \(\) => Boolean\(rouletteTimer\)/);
+});
