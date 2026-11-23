@@ -911,7 +911,10 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 /* Fase 2: onboarding. Occupa tutto lo schermo; il resto dell'app si nasconde finché non è finito. */
 /* Durante l'onboarding si nasconde l'app, ma non le finestre: backup e importazione si aprono anche da lì. */
 html[data-onboarding="true"] .site-shell > :not(dialog) { display: none; }
-.onboarding { min-height: 100dvh; padding: calc(20px + env(safe-area-inset-top)) 22px max(40px, calc(28px + env(safe-area-inset-bottom))); }
+html[data-onboarding="true"] .site-shell { flex: none; min-height: 0; margin: 0; padding: 0; }
+/* flex: none: il body è un flex alto quanto lo schermo e senza questo la schermata si schiaccerebbe (il contenuto
+   lungo uscirebbe dal riquadro e il margine in fondo andrebbe perso). */
+.onboarding { flex: none; min-height: 100dvh; padding: calc(20px + env(safe-area-inset-top)) 22px max(40px, calc(28px + env(safe-area-inset-bottom))); }
 .onboarding[hidden] { display: none; }
 /* Il passaggio riempie lo schermo: il contenuto sopra, i pulsanti sempre in fondo. */
 .onboarding-step { display: flex; flex-direction: column; gap: 18px; width: min(100%, 640px); min-height: calc(100dvh - 20px - env(safe-area-inset-top) - max(40px, calc(28px + env(safe-area-inset-bottom)))); margin: 0 auto; }

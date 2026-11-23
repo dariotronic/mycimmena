@@ -95,15 +95,18 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 				${content}
 				${restoreNotice()}
 			</div>
-			<div class="onboarding-actions">
-				${main || (nextLabel ? `<button class="button" type="button" ${nextAttrs}>${nextLabel}</button>` : '')}
-				${extra}
-				${showBack ? '<button class="button secondary" type="button" data-ob-back>Indietro</button>' : ''}
-			</div>
+			${state().restore?.ok ? '' : `
+				<div class="onboarding-actions">
+					${main || (nextLabel ? `<button class="button" type="button" ${nextAttrs}>${nextLabel}</button>` : '')}
+					${extra}
+					${showBack ? '<button class="button secondary" type="button" data-ob-back>Indietro</button>' : ''}
+				</div>
+			`}
 		</div>
 	`;
 
-	// Esito del ripristino di un backup fatto durante l'onboarding: riuscito (si può entrare subito) o no.
+	// Esito del ripristino di un backup fatto durante l'onboarding: riuscito (si può entrare subito) o no. Se è riuscito
+	// restano solo le due scelte dell'avviso, senza i pulsanti del passaggio.
 	function restoreNotice() {
 		const result = state().restore;
 		if (!result) return '';

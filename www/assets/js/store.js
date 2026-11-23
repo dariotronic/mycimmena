@@ -295,10 +295,13 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	async function unmarkEpisodes(movieId, episodes) {
 		const keys = new Set(normalizeEpisodes(episodes).map(({ s, e }) => `${s}-${e}`));
 		return transaction(['viewings', 'series'], 'readwrite', async ({ viewings, series }) => {
-			const round = (await currentSeries(series, movieId))?.round || 1;
+			const record = await currentSeries(series, movieId);
+			const round = record?.round || 1;
 			const sessions = (await request(viewings.index('movieId').getAll(movieId)))
 				.filter(viewing => viewing.scope === 'episodes' && (viewing.round || 1) === round);
 			await dropEpisodes(viewings, sessions, keys);
+			// Con un episodio in meno la serie non è più finita.
+			if (record?.status === 'finished') await request(series.put({ ...record, status: 'watching', updatedAt: new Date().toISOString() }));
 		});
 	}
 
