@@ -20,7 +20,7 @@ const state = {
 	],
 	viewings: [
 		{ id: 'a', movieId: 'tt2', date: '2026-10-01', rating: 8, place: 'Cinema', withWhom: null, notes: '', createdAt: '2026-10-01T22:00:00Z' },
-		{ id: 'b', movieId: 'tt2', date: '2026-11-20', rating: 9.5, place: null, withWhom: 'Anna', notes: '<p>Ancora meglio</p>', createdAt: '2026-11-20T22:00:00Z' },
+		{ id: 'b', movieId: 'tt2', date: '2026-11-20', rating: 9.5, place: null, withWhom: 'Anna', notes: '<p>Ancora meglio,</p><p>stessa sala</p>', createdAt: '2026-11-20T22:00:00Z' },
 		{ id: 'c', movieId: 'tt2', date: '2026-11-21', rating: null, place: null, withWhom: null, notes: '', createdAt: '2026-11-21T22:00:00Z' },
 		{ id: 'x', movieId: 'tt999', date: '2026-11-21', rating: 5, notes: '', createdAt: '2026-11-21T22:00:00Z' }
 	],
@@ -98,7 +98,7 @@ test('lists the diary by day, newest first, with ratings, notes and a title sear
 	assert.match(html, /9 spipe e ½ su 10/);
 	assert.match(html, /Senza voto/);
 	assert.match(html, /<p class="diary-meta">con Anna<\/p>/);
-	assert.match(html, /<p class="review-content diary-notes">Ancora meglio<\/p>/, 'nel diario solo una riga di testo della nota');
+	assert.match(html, /<p class="review-content diary-notes">Ancora meglio, ?stessa sala<\/p>/, 'nel diario solo una riga di testo della nota, con tutte le lettere');
 	assert.match(html, /class="icon-button small viewing-edit" data-viewing-id="b"/);
 	const empty = makeViews(buildAppData({ ...state, viewings: [] })).renderDiary();
 	assert.match(empty, /Il diario è vuoto/);
@@ -112,9 +112,9 @@ test('shows "I miei voti" on the movie card with every viewing and the average',
 	assert.match(html, /I miei voti/);
 	assert.match(html, /Media 9 spipe su 10 · 3 visioni/);
 	assert.deepEqual([...html.matchAll(/data-viewing-id="([^"]+)"/g)].map(match => match[1]), ['c', 'b', 'a']);
-	assert.match(html, /Segna come visto di nuovo/);
-	// Mai visto ma in watchlist: solo il pulsante; né visto né in watchlist: niente.
-	assert.match(views.renderMyViewings(data.movies[0]), /^<div class="movie-info-mark">.*Segna come visto<\/span>/s);
+	// "Segna come visto" sta sotto l'Hypometro (movie-info.js), non qui: senza visioni la sezione è vuota.
+	assert.doesNotMatch(html, /mark-seen/);
+	assert.equal(views.renderMyViewings(data.movies[0]), '');
 	assert.equal(views.renderMyViewings({ id: 'tt777', title: 'Altro' }), '');
 });
 
@@ -154,12 +154,14 @@ test('asks how a past evening went and summarizes the home page otherwise', () =
 	assert.match(free, /Visti di recente[\s\S]*The Thing \(1982\)/);
 });
 
-test('adds "mark as seen" to every watchlist row', () => {
+test('puts "add to the evening" on every watchlist row and "mark as seen" only in the title card', () => {
 	const html = makeViews(buildAppData(state)).renderMovieRows();
-	assert.match(html, /class="button secondary icon-only mark-seen" data-movie-id="tt1"[^>]*aria-label="Segna Alien come visto"/);
-	// "Aggiungi alla serata" sta solo nella scheda del titolo, sotto l'Hypometro: sulle righe c'erano troppe icone.
-	assert.doesNotMatch(html, /schedule-movie|alla serata/);
-	assert.match(readFileSync(new URL('../www/assets/js/movie-info.js', import.meta.url), 'utf8'), /data-schedule-movie="\$\{escapeHtml\(movieId\)\}">\$\{icon\('movie'\)\}<span>Aggiungi alla prossima serata<\/span>/);
+	assert.match(html, /class="button icon-only schedule-movie" data-movie-id="tt1"[^>]*aria-label="Aggiungi Alien alla prossima serata"/);
+	assert.doesNotMatch(html, /mark-seen/);
+	const info = readFileSync(new URL('../www/assets/js/movie-info.js', import.meta.url), 'utf8');
+	assert.match(info, /<span>\$\{seen \? 'Segna come visto di nuovo' : 'Segna come visto'\}<\/span>/);
+	assert.match(info, /data-schedule-movie="\$\{escapeHtml\(movie\.id\)\}">\$\{icon\('movie'\)\}<span>Aggiungi alla prossima serata<\/span>/);
+	assert.match(info, /movieInfoVote\.after\(movieInfoActions\)/, 'le azioni seguono l’Hypometro');
 });
 
 test('wires the diary, search, posters and evening to the local store', () => {

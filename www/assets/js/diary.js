@@ -1,10 +1,13 @@
 // Diario (PIANO.md, §6): ricerca nella lista e dialog per segnare una visione, modificarla o eliminarla.
 // Le visioni si salvano con store.js; voto (slider dei gatti) e note usano l'editor delle recensioni del sito.
+import { viewingLabel } from './app-data.js';
 import { hydrateIcons } from './icons.js';
 import { showErrorToast, showToast } from './toasts.js';
 import { applyReviewFormat, handleRatingKeydown, handleRatingPointerDown, handleReviewInput, reviewTextLength, updateReviewCounter, updateReviewRating } from './review-editor.js';
 
-export function createDiary({ app, store, getData, viewRenderer, askConfirmation, refresh }) {
+// onEpisodeSaved(movieId, before, episodes): dopo la visione nuova di un episodio, per proporre il voto alla stagione o
+// alla serie appena finite (series-ui.js).
+export function createDiary({ app, store, getData, viewRenderer, askConfirmation, refresh, onEpisodeSaved = async () => {} }) {
 	const dialog = document.getElementById('viewing-dialog');
 	const dialogTitle = document.getElementById('viewing-dialog-title');
 	const dialogBody = document.getElementById('viewing-dialog-body');
@@ -22,8 +25,8 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 	const isDirty = () => Boolean(form()) && snapshot(form()) !== initialSnapshot;
 
 	// `movieId` per una visione nuova, `viewingId` per modificarne una esistente. Per le serie `scope` 'season' (con
-	// `season`) o 'series' apre il voto a una stagione o a tutta la serie.
-	function openViewingForm({ movieId = null, viewingId = null, scope = null, season = null }) {
+	// `season`) o 'series' apre il voto a una stagione o a tutta la serie; 'episodes' (con `episode`) la visione di un episodio.
+	function openViewingForm({ movieId = null, viewingId = null, scope = null, season = null, episode = null }) {
 		const viewing = viewingId ? getData().viewings.find(item => item.id === viewingId) : null;
 		const movie = viewing?.movie || findMovie(movieId);
 		if (!movie) {
@@ -31,8 +34,8 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 			return;
 		}
 		const inWatchlist = getData().movies.some(item => item.id === movie.id);
-		dialogTitle.textContent = viewing ? 'Modifica la visione' : scope ? 'Il tuo voto' : 'Segna come visto';
-		dialogBody.innerHTML = viewRenderer.renderViewingForm({ movie, viewing, inWatchlist, scope, season });
+		dialogTitle.textContent = viewing ? 'Modifica la visione' : scope && scope !== 'episodes' ? 'Il tuo voto' : 'Segna come visto';
+		dialogBody.innerHTML = viewRenderer.renderViewingForm({ movie, viewing, inWatchlist, scope, season, episode });
 		hydrateIcons(dialogBody);
 		const target = form();
 		updateReviewRating(target);
@@ -74,6 +77,9 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 			notes: editor.innerHTML,
 			...(target.dataset.scope ? { scope: target.dataset.scope, season: target.dataset.season ? Number(target.dataset.season) : null } : {})
 		};
+		const episodes = target.dataset.episode ? [target.dataset.episode.split('-').map(Number)].map(([s, e]) => ({ s, e })) : [];
+		if (episodes.length) input.episodes = episodes;
+		const before = episodes.length ? getData().seriesOf(input.movieId) : null;
 		const submit = target.querySelector('button[type="submit"]');
 		submit.disabled = true;
 		try {
@@ -84,11 +90,13 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 				const removeFromWatchlist = data.get('removeFromWatchlist') === 'on';
 				if (input.scope) input.round = getData().seriesOf?.(input.movieId)?.round || 1;
 				await store.addViewing(input, { removeFromWatchlist });
-				if (input.scope) showToast('seriesRated');
+				if (episodes.length) showToast('episodesMarked', { label: viewingLabel({ scope: 'episodes', episodes }, before.seasons) });
+				else if (input.scope) showToast('seriesRated');
 				else showToast('viewingSaved', { removed: removeFromWatchlist });
 			}
 			await closeDialog({ confirm: false });
 			await refresh();
+			if (episodes.length) await onEpisodeSaved(input.movieId, before, episodes);
 		} catch (error) {
 			showErrorToast(error);
 			submit.disabled = false;

@@ -343,7 +343,7 @@ test('renders cards with only the poster and evenly spaced action controls', () 
 	assert.doesNotMatch(html, /movie-title|movie-director|movie-year/);
 	assert.match(html, /movie-info-trigger/);
 	assert.match(html, /remove-movie/);
-	assert.doesNotMatch(html, /schedule-movie/);
+	assert.match(html, /schedule-movie/);
 });
 
 test('makes posters open movie details in home, diary, randomizer, and list views', () => {

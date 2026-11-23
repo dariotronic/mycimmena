@@ -3,13 +3,13 @@ import { icon } from './icons.js';
 import { catState, formatSpipe } from './domain.js';
 import { formatHype, HYPE_LEVELS, HYPE_POINTS_EMOJI, HYPE_TITLE, hypeLevel, watchlistVotes } from './hype.js';
 import { sanitizeNotes } from './sanitize.js';
-import { viewingsOf } from './app-data.js';
+import { viewingLabel, viewingsOf } from './app-data.js';
 import { DEFAULT_DRAW_FILTERS, drawChances, formatChance } from './draw.js';
 import { soundEnabled } from './slot-sounds.js';
 import { APP_VERSION, CREDIT_HANDLE, CREDIT_URL, REPO_URL } from './app-info.js';
 import { birthdayFields, birthdayMonthDay, COMPANY, diaryDefaults, flavourLine, isBirthday, LANGUAGES, PLACES, POPCORN, SPECTATORS } from './profile.js';
 import { renderWatchingRow } from './series-ui.js';
-import { formatEpisode, parseEpisodeKey } from './series.js';
+import { renderMoviePicker } from './movie-picker.js';
 import { IMPORT_SOURCES } from './watchlist-import.js';
 
 // Gatto SVG (simboli #cat-full e #cat-empty in index.html): la sagoma vuota sotto, quella calico sopra,
@@ -104,21 +104,13 @@ export function createViews(context) {
 
 		return `
 			<section class="home-view" aria-labelledby="home-title">
-				${pageHeader('Home', 'La prossima serata.')}
+				${pageHeader('Home', 'La prossima serata.', homeActions(meeting))}
 				${renderBirthday(data)}
 				<div class="home-eyebrow-row">
 					<p class="eyebrow">La prossima serata</p>
-					<button id="share-home" class="icon-button" type="button" aria-label="Condividi la prossima serata" title="Condividi">
-						${icon('share')}
-					</button>
 					<button class="icon-button" type="button" data-edit-meeting aria-label="Modifica la prossima serata" title="Modifica">
 						${icon('edit')}
 					</button>
-					${meeting.date ? `
-						<button id="calendar-home" class="icon-button" type="button" aria-label="Aggiungi la prossima serata al calendario" title="Aggiungi al calendario">
-							${icon('event_available')}
-						</button>
-					` : ''}
 				</div>
 				<div class="home-details">
 					<div>
@@ -138,6 +130,20 @@ export function createViews(context) {
 				</div>
 				<div class="home-film-list">${movieRows}</div>
 			</section>
+		`;
+	}
+
+	// Condividi e "Aggiungi al calendario" (solo con la data) di fianco al titolo "Home".
+	function homeActions(meeting) {
+		return `
+			<button id="share-home" class="icon-button" type="button" aria-label="Condividi la prossima serata" title="Condividi">
+				${icon('share')}
+			</button>
+			${meeting.date ? `
+				<button id="calendar-home" class="icon-button" type="button" aria-label="Aggiungi la prossima serata al calendario" title="Aggiungi al calendario">
+					${icon('event_available')}
+				</button>
+			` : ''}
 		`;
 	}
 
@@ -268,13 +274,14 @@ export function createViews(context) {
 
 	// Diario: le visioni dalla più recente, raggruppate per giorno, con ricerca per titolo (PIANO.md, §6).
 	function renderDiary() {
-		const header = pageHeader('Diario', 'Quello che hai visto.');
+		const header = pageHeader('Diario', 'Quello che hai visto.', (getData().viewings || []).length
+			? `<a class="icon-button" href="#statistiche" aria-label="Le tue statistiche" title="Statistiche">${icon('bar_chart')}</a>`
+			: '');
 		if (!(getData().viewings || []).length) {
 			return `${header}${emptyState('Il diario è vuoto. Segna come visto un titolo dalla watchlist o dalla sua scheda.', 'Vai alla Watchlist', '#lista')}`;
 		}
 		return `
 			${header}
-			<p class="diary-stats-link"><a class="button secondary" href="#statistiche">${icon('bar_chart')} Le tue statistiche</a></p>
 			<section class="archive-search-area">
 				<form id="diary-search-form" class="search-bar" role="search" autocomplete="off">
 					<div class="search-input-wrap">
@@ -311,9 +318,8 @@ export function createViews(context) {
 	function diaryRow(viewing) {
 		const movie = viewing.movie;
 		const meta = viewingMeta(viewing);
-		// Senza note della sessione, quelle dei singoli episodi: "S1·E3: …".
-		const episodeNotes = Object.entries(viewing.episodeNotes || {}).map(([key, text]) => `${formatEpisode(parseEpisodeKey(key))}: ${text}`).join(' · ');
-		const notes = (sanitizeNotes(viewing.notes).text || episodeNotes).replace(/s+/g, ' ').trim();
+		// Della nota solo il testo, con gli a capo diventati spazi: nel diario se ne vede una riga.
+		const notes = sanitizeNotes(viewing.notes).text.replace(/\s+/g, ' ').trim();
 		return `
 			<article class="archive-film-row diary-row">
 				${moviePosterButton(movie, 'archive-film-poster')}
@@ -342,12 +348,10 @@ export function createViews(context) {
 	// "I miei voti" nella scheda del titolo: tutte le visioni, dalla più recente, con la media se sono più di una.
 	function renderMyViewings(movie) {
 		const { list, average, ratedCount } = viewingsOf(getData(), movie.id);
-		const inWatchlist = getData().movies.some(item => item.id === movie.id);
-		const markLabel = list.length ? 'Segna come visto di nuovo' : 'Segna come visto';
-		const markButton = `<button class="button secondary mark-seen" data-movie-id="${escapeHtml(movie.id)}" type="button">${icon('task_alt')}<span>${markLabel}</span></button>`;
-		if (!list.length) return inWatchlist ? `<div class="movie-info-mark">${markButton}</div>` : '';
+		// "Segna come visto" sta sotto l'Hypometro, con "Aggiungi alla prossima serata" (movie-info.js).
+		if (!list.length) return '';
 		const rounded = average === null ? null : Math.round(average * 2) / 2;
-		if (contentType(movie) === 'series') return renderSeriesVotes(movie, list) + `<div class="movie-info-mark">${markButton}</div>`;
+		if (contentType(movie) === 'series') return renderSeriesVotes(movie, list);
 		const summary = ratedCount > 1
 			? `<p class="my-viewings-average">Media ${escapeHtml(formatSpipe(rounded))} · ${list.length} visioni</p>`
 			: list.length > 1 ? `<p class="my-viewings-average">${list.length} visioni</p>` : '';
@@ -370,7 +374,6 @@ export function createViews(context) {
 					`;
 				}).join('')}
 			</ul>
-			<div class="movie-info-mark">${markButton}</div>
 		`;
 	}
 
@@ -419,15 +422,17 @@ export function createViews(context) {
 	// quelli delle recensioni del sito (review-editor.js), con il voto facoltativo.
 	// `scope` e `season` per il voto a una stagione o a tutta la serie; una visione nuova propone "Dove" e "Con chi"
 	// dalle risposte dell'onboarding.
-	function renderViewingForm({ movie, viewing = null, inWatchlist = false, scope = null, season = null }) {
+	// `episode` ({ s, e }) con scope 'episodes': la visione di un episodio nuovo (dalla sezione Episodi della scheda).
+	function renderViewingForm({ movie, viewing = null, inWatchlist = false, scope = null, season = null, episode = null }) {
 		const rating = viewing?.rating ? Number(viewing.rating) : 0;
 		const id = viewing ? escapeHtml(viewing.id) : 'new';
 		const kind = viewing?.scope || scope;
-		// Il voto a una stagione o alla serie non è una serata: niente "Dove" e "Con chi" proposti.
-		const defaults = viewing || kind ? {} : diaryDefaults(getData().profile);
-		const subtitle = viewing?.label || (kind === 'season' ? `Stagione ${season}` : kind === 'series' ? 'Voto alla serie' : '');
+		// Il voto a una stagione o alla serie non è una serata: niente "Dove" e "Con chi" proposti (per un episodio sì).
+		const defaults = viewing || (kind && kind !== 'episodes') ? {} : diaryDefaults(getData().profile);
+		const episodeName = episode ? viewingLabel({ scope: 'episodes', episodes: [episode] }, movie.seasons) : '';
+		const subtitle = viewing?.label || episodeName || (kind === 'season' ? `Stagione ${season}` : kind === 'series' ? 'Voto alla serie' : '');
 		return `
-			<form class="review-form viewing-form" data-review-form="${escapeHtml(movie.id)}" data-viewing-form${viewing ? ` data-viewing-id="${id}"` : ''}${!viewing && kind ? ` data-scope="${escapeHtml(kind)}"${season ? ` data-season="${Number(season)}"` : ''}` : ''} novalidate>
+			<form class="review-form viewing-form" data-review-form="${escapeHtml(movie.id)}" data-viewing-form${viewing ? ` data-viewing-id="${id}"` : ''}${!viewing && kind ? ` data-scope="${escapeHtml(kind)}"${season ? ` data-season="${Number(season)}"` : ''}${episode ? ` data-episode="${Number(episode.s)}-${Number(episode.e)}"` : ''}` : ''} novalidate>
 				<p class="viewing-form-title">${escapeHtml(movieName(movie))}${subtitle ? ` <span class="diary-label">· ${escapeHtml(subtitle)}</span>` : ''}</p>
 				<div class="form-grid">
 					<div class="field">
@@ -798,8 +803,8 @@ export function createViews(context) {
 				`}
 				<div class="movie-actions">
 					${infoButton(movie)}
-						<button class="button secondary icon-only mark-seen" data-movie-id="${escapeHtml(movie.id)}" type="button" aria-label="Segna ${escapeHtml(movie.title)} come visto" title="Segna come visto">
-							${icon('task_alt')}
+						<button class="button icon-only schedule-movie" data-movie-id="${escapeHtml(movie.id)}" type="button" ${scheduled.has(movie.id) ? 'disabled' : ''} aria-label="Aggiungi ${escapeHtml(movie.title)} alla prossima serata" title="Aggiungi alla prossima serata">
+							${icon('movie')}
 						</button>
 						<button class="button secondary icon-only remove-movie" data-movie-id="${escapeHtml(movie.id)}" type="button" aria-label="Rimuovi ${escapeHtml(movie.title)} dalla watchlist" title="Rimuovi">
 							${icon('delete')}
@@ -858,10 +863,7 @@ export function createViews(context) {
 						<div class="field"><label for="profile-birthday-day">Compleanno</label>${birthdayFields('profile-birthday', profile.birthday)}</div>
 						<div class="field full">
 							<span class="field-label">Film del cuore</span>
-							<div class="movie-picker" data-movie-picker>
-								<input type="search" placeholder="Cerca il tuo film del cuore" aria-label="Cerca il tuo film del cuore" data-movie-picker-input>
-								<div class="movie-picker-results" data-movie-picker-results></div>
-							</div>
+							${renderMoviePicker(data.favorite)}
 						</div>
 						${selectField('place', 'Dove guardi di solito', PLACES, profile.place)}
 						${selectField('company', 'Con chi', COMPANY, profile.company)}

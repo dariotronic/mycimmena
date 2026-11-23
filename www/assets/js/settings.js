@@ -82,14 +82,9 @@ export function createSettings({ store, details, getData, refresh, onProfileSave
 				showErrorToast(error);
 			}
 		});
-		bindMoviePicker(form, {
-			onPick: async movie => {
-				await store.saveMovie(movie);
-				await store.updateKv('profile', { favoriteMovieId: movie.id });
-				await refresh();
-				showToast('profileSaved');
-			}
-		});
+		// Il film scelto entra nel catalogo; nel profilo va con "Salva il profilo", insieme al resto (prima si salvava
+		// subito e la pagina, ridisegnata, perdeva quello che si stava scrivendo).
+		bindMoviePicker(form, { onPick: movie => store.saveMovie(movie) });
 		document.querySelectorAll('[data-settings-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.settingsMode)));
 		document.querySelector('[data-open-key]')?.addEventListener('click', openKeyDialog);
 	}

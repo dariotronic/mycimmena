@@ -122,9 +122,11 @@ const diary = createDiary({
 	getData,
 	viewRenderer,
 	askConfirmation,
-	refresh
+	refresh,
+	// Dopo la visione nuova di un episodio: voto proposto alla stagione o alla serie appena finite.
+	onEpisodeSaved: (movieId, before, episodes) => seriesUi.proposeVotes(movieId, before, episodes)
 });
-createSeriesUi({ app, store, details, getData, refresh, ask, askConfirmation, openViewing: target => diary.openViewingForm(target), refreshMovieInfo });
+const seriesUi = createSeriesUi({ app, store, details, getData, refresh, ask, askConfirmation, openViewing: target => diary.openViewingForm(target), refreshMovieInfo });
 // Notifiche locali: si riallineano da sole dopo ogni lettura dei dati; il permesso si chiede solo dopo un'azione.
 const notifications = createNotifications({ getData });
 const askNotifications = () => notifications.sync({ ask: true }).then(updateNotifyStatus);

@@ -225,6 +225,10 @@ body.modal-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; background: var(--line); } }
 .page-heading h1 { margin: 0; font-family: Spectral, serif; font-size: clamp(2.6rem, 6vw, 4.6rem); font-weight: 400; line-height: 1; }
 .page-heading p { margin: 8px 0 0; color: var(--muted); font-size: .86rem; }
+/* Pulsanti a icona di fianco al titolo (Home: condividi e calendario; Diario: statistiche). */
+.page-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; }
+.page-heading-actions { display: flex; align-items: center; gap: 8px; }
+.page-heading-actions .icon-button { width: 40px; height: 40px; }
 .section-title { margin: 0 0 18px; font-family: Spectral, serif; font-size: 1.7rem; font-weight: 400; }
 .empty-state { width: 100%; padding: 34px 28px; color: var(--muted); border: 1px dashed var(--line); border-radius: var(--radius-lg); background: var(--surface); }
 .empty-state p { margin: 0 0 14px; line-height: 1.7; }
@@ -596,9 +600,7 @@ body.modal-open { overflow: hidden; }
 .movie-info-cover.placeholder { display: grid; place-items: center; color: var(--clay); font-family: Spectral, serif; font-size: 1.7rem; }
 .movie-vote { display: grid; gap: 8px; margin: 0 0 20px; padding: 14px 16px; border-radius: var(--radius-md); background: var(--accent-wash-strong); text-align: left; }
 .movie-vote[hidden] { display: none; }
-.movie-info-schedule { gap: 8px; width: 100%; margin-top: 6px; }
-.movie-info-schedule .material-icons-outlined, .movie-info-scheduled .material-icons-outlined { font-size: 20px; }
-.movie-info-scheduled { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 6px 0 0; color: var(--rust); font-size: .85rem; font-weight: 700; }
+.movie-info-scheduled { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0; color: var(--rust); font-size: .85rem; font-weight: 700; }
 .movie-vote-title { margin: 0; color: var(--rust); font-size: .75rem; font-weight: 700; letter-spacing: .04em; }
 .movie-vote-total { margin: 0; color: var(--muted); font-size: .85rem; }
 .movie-vote-total strong { color: var(--ink); }
@@ -910,8 +912,11 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .my-viewing .review-summary { display: flex; align-items: center; gap: 8px; }
 .my-viewing .diary-meta { margin: 0; }
 .my-viewing-notes { color: var(--muted); font-family: Spectral, serif; font-size: .95rem; line-height: 1.45; }
-.movie-info-mark .mark-seen { gap: 8px; width: 100%; }
-.movie-info-mark .mark-seen .material-icons-outlined { font-size: 20px; }
+/* Sotto l'Hypometro, fuori dal riquadro: "Segna come visto" e "Aggiungi alla prossima serata". */
+.movie-info-actions { display: grid; gap: 8px; margin: -8px 0 20px; }
+.movie-info-actions[hidden] { display: none; }
+.movie-info-actions .button { gap: 8px; width: 100%; }
+.movie-info-actions .material-icons-outlined { font-size: 20px; }
 
 /* Fase 2: onboarding. Occupa tutto lo schermo; il resto dell'app si nasconde finché non è finito. */
 /* Durante l'onboarding si nasconde l'app, ma non le finestre: backup e importazione si aprono anche da lì. */
@@ -1023,9 +1028,6 @@ html[data-onboarding="true"] .site-shell { flex: none; min-height: 0; margin: 0;
 /* Episodio con una nota: un puntino nell'angolo. */
 .episode { position: relative; }
 .episode.has-note::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--apricot); }
-.episode-form { display: grid; gap: 14px; }
-.episode-form .field textarea { width: 100%; min-height: 96px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; resize: vertical; }
-.episode-form-title { margin: -8px 0 0; }
 .series-season-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 12px 12px; font-size: .8rem; }
 .series-season-actions input { min-height: 34px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: inherit; }
 .series-hint { margin: 0; font-size: .75rem; }
@@ -1063,8 +1065,18 @@ html[data-onboarding="true"] .site-shell { flex: none; min-height: 0; margin: 0;
 .movie-picker { display: grid; gap: 6px; }
 .movie-picker input { min-height: 46px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font: inherit; }
 .movie-picker-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.movie-picker-option { display: grid; width: 100%; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
-.movie-picker-option small { color: var(--muted); font-weight: 500; }
+.movie-picker-option { display: flex; align-items: center; gap: 12px; width: 100%; padding: 6px 12px 6px 6px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.movie-picker-search { display: grid; gap: 6px; }
+.movie-picker-search[hidden], .movie-picker-chosen[hidden] { display: none; }
+/* Locandina piccola nei risultati e nella card del film scelto. */
+.movie-picker-poster { flex: none; width: 40px; aspect-ratio: 2 / 3; border-radius: 4px; object-fit: cover; background: var(--clay-wash); }
+.movie-picker-name { display: grid; gap: 2px; min-width: 0; }
+.movie-picker-name strong { font-weight: 600; }
+.movie-picker-name small { color: var(--muted); font-size: .8rem; font-weight: 500; }
+.movie-picker-chosen { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 8px; border: 1px solid var(--accent-border); border-radius: var(--radius-md); background: var(--accent-wash); }
+.movie-picker-chosen .movie-picker-poster { width: 52px; }
+.movie-picker-chosen .movie-picker-name { flex: 1; }
+.movie-picker-chosen .movie-picker-name strong { font-family: Spectral, serif; font-size: 1.1rem; font-weight: 400; }
 .birthday-banner { margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--accent-border); border-radius: var(--radius-lg); background: var(--accent-wash); }
 .birthday-title { margin: 0; font-family: Spectral, serif; font-size: 1.5rem; }
 .birthday-banner .help-text { margin: 4px 0 0; }
@@ -1148,8 +1160,6 @@ a.has-update::after { content: ''; position: absolute; top: 6px; right: 6px; wid
 
 /* Fase 5: statistiche. Un solo colore (l'accento), barre sottili con l'estremità arrotondata, griglia assente,
    valori in inchiostro del testo; il suggerimento compare passando sopra o toccando una barra. */
-.diary-stats-link { margin: 0 0 18px; }
-.diary-stats-link .button { display: inline-flex; align-items: center; gap: 8px; }
 .stats-page { display: grid; gap: 18px; }
 .stats-filter { display: flex; align-items: center; gap: 10px; }
 .stats-filter label { color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }

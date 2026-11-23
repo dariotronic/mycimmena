@@ -75,8 +75,8 @@ export function watchedEpisodes(viewings, movieId, round = 1) {
 	return watched;
 }
 
-// Per ogni episodio visto nel giro corrente: quando (la data della sessione) e la sua nota. Se per errore un episodio
-// sta in due sessioni vale la più recente.
+// Per ogni episodio visto nel giro corrente: quando, la sua visione nel diario e se ha una nota (solo per le visioni di
+// un episodio solo). Se per errore un episodio sta in due visioni vale la più recente.
 export function episodeDetails(viewings, movieId, round = 1) {
 	const details = new Map();
 	const sessions = (viewings || [])
@@ -85,7 +85,7 @@ export function episodeDetails(viewings, movieId, round = 1) {
 	for (const viewing of sessions) {
 		for (const episode of viewing.episodes || []) {
 			const key = episodeKey(episode);
-			details.set(key, { date: viewing.date, note: viewing.episodeNotes?.[key] || '', viewingId: viewing.id });
+			details.set(key, { date: viewing.date, viewingId: viewing.id, hasNote: viewing.episodes.length === 1 && Boolean(viewing.notes) });
 		}
 	}
 	return details;

@@ -96,6 +96,7 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 		movieInfoPoster.innerHTML = poster(movie, 'movie-info-cover', true);
 		movieInfoTitle.textContent = movieName(movie);
 		renderVote(movieId);
+		renderActions(movie);
 		renderMovieInfoDetails(movie);
 		renderSeriesSection(movie);
 		renderViewings(movie);
@@ -172,9 +173,14 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 	// resta dopo il titolo, con lo slider orizzontale.
 	const movieInfoSide = document.getElementById('movie-info-side');
 	const desktopLayout = window.matchMedia('(min-width: 641px)');
+	// Il blocco delle azioni segue sempre l'Hypometro.
+	const movieInfoActions = document.createElement('div');
+	movieInfoActions.className = 'movie-info-actions';
+	movieInfoActions.hidden = true;
 	function placeVote() {
 		if (desktopLayout.matches) movieInfoSide.append(movieInfoVote);
 		else movieInfoTitle.after(movieInfoVote);
+		movieInfoVote.after(movieInfoActions);
 	}
 	placeVote();
 	desktopLayout.addEventListener('change', placeVote);
@@ -199,13 +205,26 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 					aria-valuetext="${escapeHtml(hypeText(votes.mine))}">
 				<div class="movie-vote-scale" aria-hidden="true">${scale}</div>
 			</div>
-			${isScheduled(movieId)
-				? `<p class="movie-info-scheduled">${icon('movie')}<span>Nella prossima serata</span></p>`
-				: `<button class="button secondary movie-info-schedule" type="button" data-schedule-movie="${escapeHtml(movieId)}">${icon('movie')}<span>Aggiungi alla prossima serata</span></button>`}
 		`;
-		hydrateIcons(movieInfoVote);
 	}
 	const isScheduled = movieId => (getData().upcoming?.movies || []).some(movie => movie.id === movieId);
+
+	// Sotto l'Hypometro, fuori dal suo riquadro: "Segna come visto" (anche "di nuovo" per i titoli già nel diario) e,
+	// per i titoli in watchlist, "Aggiungi alla prossima serata".
+	function renderActions(movie) {
+		const inWatchlist = Boolean(watchlistMovie(movie.id));
+		const seen = (getData().viewings || []).some(viewing => viewing.movieId === movie.id);
+		const buttons = [];
+		if (inWatchlist || seen) buttons.push(`<button class="button secondary mark-seen" data-movie-id="${escapeHtml(movie.id)}" type="button">${icon('task_alt')}<span>${seen ? 'Segna come visto di nuovo' : 'Segna come visto'}</span></button>`);
+		if (inWatchlist) {
+			buttons.push(isScheduled(movie.id)
+				? `<p class="movie-info-scheduled">${icon('movie')}<span>Nella prossima serata</span></p>`
+				: `<button class="button secondary movie-info-schedule" type="button" data-schedule-movie="${escapeHtml(movie.id)}">${icon('movie')}<span>Aggiungi alla prossima serata</span></button>`);
+		}
+		movieInfoActions.innerHTML = buttons.join('');
+		movieInfoActions.hidden = !buttons.length;
+		hydrateIcons(movieInfoActions);
+	}
 
 	// Sotto il titolo dell'Hypometro: il livello in parole ("Volentieri"), o l'invito a votare.
 	const voteLabel = score => (score === null ? 'Quanta voglia hai di vederlo?' : hypeLevel(score).label);
@@ -318,7 +337,7 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 		event.preventDefault();
 		if (score !== targetVote) saveVote(movieInfoDialog.dataset.movieId, snapVote(range, score));
 	});
-	movieInfoVote.addEventListener('click', async event => {
+	movieInfoActions.addEventListener('click', async event => {
 		const schedule = event.target.closest('[data-schedule-movie]');
 		if (schedule) {
 			schedule.disabled = true;
@@ -326,6 +345,13 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 			refreshMovieInfo();
 			return;
 		}
+		const mark = event.target.closest('.mark-seen');
+		if (mark) {
+			movieInfoDialog.close();
+			openViewing({ movieId: mark.dataset.movieId });
+		}
+	});
+	movieInfoVote.addEventListener('click', async event => {
 		const step = event.target.closest('[data-hype-score]');
 		const range = document.getElementById('movie-vote-range');
 		if (!step || !range) return;

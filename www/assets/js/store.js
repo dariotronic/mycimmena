@@ -103,17 +103,6 @@ export function normalizeViewing(input, existing = null) {
 	};
 }
 
-// Note dei singoli episodi di una sessione: { "S-E": testo semplice }, solo per gli episodi della sessione.
-export const MAX_EPISODE_NOTE = 2000;
-export function normalizeEpisodeNotes(notes, episodes) {
-	const keys = new Set(episodes.map(({ s, e }) => `${s}-${e}`));
-	const clean = {};
-	for (const [key, value] of Object.entries(notes && typeof notes === 'object' ? notes : {})) {
-		const text = String(value ?? '').trim().slice(0, MAX_EPISODE_NOTE);
-		if (keys.has(key) && text) clean[key] = text;
-	}
-	return clean;
-}
 
 // Campi delle visioni delle serie: solo se ci sono (i film non li hanno).
 function seriesFields(input, existing) {
@@ -123,7 +112,6 @@ function seriesFields(input, existing) {
 	return {
 		scope,
 		episodes: scope === 'episodes' ? episodes : [],
-		episodeNotes: scope === 'episodes' ? normalizeEpisodeNotes(input.episodeNotes ?? existing?.episodeNotes, episodes) : {},
 		season: scope === 'season' ? positiveInt(input.season ?? existing?.season) : null,
 		round: positiveInt(input.round ?? existing?.round) || 1
 	};
@@ -252,92 +240,83 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		return await request(series.get(movieId)) || null;
 	}
 
-	// Segna episodi visti in una data: si aggiungono alla sessione di quel giorno del giro corrente, o ne aprono una nuova.
-	// La serie passa "in corso" ed esce dalla watchlist (e dalla serata in programma).
+	// Dopo un episodio segnato la serie passa "in corso" (anche se era finita e sono arrivate stagioni nuove: se con
+	// questo è finita davvero, la scheda la segna "Finita" subito dopo, series-ui.js) ed esce dalla watchlist e dalla
+	// serata in programma.
+	async function startWatching({ series, watchlist, kv }, movieId) {
+		const stamp = new Date().toISOString();
+		const record = await currentSeries(series, movieId) || { movieId, round: 1, startedAt: stamp };
+		const nextRecord = { ...record, status: 'watching', round: record.round || 1, updatedAt: stamp };
+		await request(series.put(nextRecord));
+		await request(watchlist.delete(movieId));
+		const planned = await getKv(kv, 'planned');
+		if (planned?.movieIds?.includes(movieId)) await putKv(kv, 'planned', { ...planned, movieIds: planned.movieIds.filter(id => id !== movieId) });
+		return nextRecord;
+	}
+
+	// Visioni degli episodi del giro corrente di una serie.
+	async function episodeSessions(viewings, movieId, round) {
+		return (await request(viewings.index('movieId').getAll(movieId)))
+			.filter(viewing => viewing.scope === 'episodes' && (viewing.round || 1) === round);
+	}
+
+	// Segna episodi visti in una data: ognuno diventa una visione a sé nel diario (con la sua card, voto e note).
+	// Gli episodi già segnati nel giro corrente si saltano.
 	async function markEpisodes(movieId, episodes, { date }) {
 		if (!DATE.test(String(date || ''))) throw new Error('Data non valida.');
 		const list = normalizeEpisodes(episodes);
 		if (!list.length) throw new Error('Nessun episodio da segnare.');
 		return transaction(['movies', 'viewings', 'series', 'watchlist', 'kv'], 'readwrite', async ({ movies, viewings, series, watchlist, kv }) => {
 			if (!(await request(movies.get(movieId)))) throw new Error('Titolo sconosciuto.');
-			const stamp = new Date().toISOString();
-			const record = await currentSeries(series, movieId) || { movieId, status: 'watching', round: 1, startedAt: stamp };
-			const round = record.round || 1;
-			const sameDay = (await request(viewings.index('movieId').getAll(movieId)))
-				.find(viewing => viewing.scope === 'episodes' && viewing.date === date && (viewing.round || 1) === round);
-			const viewing = sameDay
-				? { ...sameDay, episodes: normalizeEpisodes([...(sameDay.episodes || []), ...list]), updatedAt: stamp }
-				: normalizeViewing({ movieId, date, scope: 'episodes', episodes: list, round });
-			await request(viewings.put(viewing));
-			// Segnare un episodio rimette la serie in corso (anche se era finita e sono arrivate stagioni nuove):
-			// se con questo è finita davvero, la scheda la segna "Finita" subito dopo (series-ui.js).
-			const nextRecord = { ...record, status: 'watching', updatedAt: stamp };
-			await request(series.put(nextRecord));
-			await request(watchlist.delete(movieId));
-			const planned = await getKv(kv, 'planned');
-			if (planned?.movieIds?.includes(movieId)) await putKv(kv, 'planned', { ...planned, movieIds: planned.movieIds.filter(id => id !== movieId) });
-			return { viewing, series: nextRecord };
+			const round = (await currentSeries(series, movieId))?.round || 1;
+			const watched = new Set((await episodeSessions(viewings, movieId, round)).flatMap(viewing => (viewing.episodes || []).map(({ s, e }) => `${s}-${e}`)));
+			const created = [];
+			for (const episode of list) {
+				if (watched.has(`${episode.s}-${episode.e}`)) continue;
+				const viewing = normalizeViewing({ movieId, date, scope: 'episodes', episodes: [episode], round });
+				await request(viewings.put(viewing));
+				created.push(viewing);
+			}
+			const record = await startWatching({ series, watchlist, kv }, movieId);
+			return { viewings: created, series: record };
 		});
 	}
 
-	// Toglie degli episodi dalle sessioni del giro corrente (con le loro note). Una sessione rimasta senza episodi,
-	// voto e note sparisce. `keep`: la sessione da non toccare (quella in cui un episodio si sta spostando).
-	async function dropEpisodes(viewings, sessions, keys, keep = null) {
-		for (const viewing of sessions) {
-			if (viewing.id === keep) continue;
-			const remaining = (viewing.episodes || []).filter(({ s, e }) => !keys.has(`${s}-${e}`));
-			if (remaining.length === (viewing.episodes || []).length) continue;
-			if (!remaining.length && !viewing.rating && !viewing.notes) await request(viewings.delete(viewing.id));
-			else await request(viewings.put({ ...viewing, episodes: remaining, episodeNotes: normalizeEpisodeNotes(viewing.episodeNotes, remaining), updatedAt: new Date().toISOString() }));
-		}
-	}
-
+	// Toglie il segno a degli episodi del giro corrente. Una visione rimasta senza episodi, voto e note sparisce
+	// (le visioni di più episodi insieme vengono dalle versioni fino alla 0.5).
 	async function unmarkEpisodes(movieId, episodes) {
 		const keys = new Set(normalizeEpisodes(episodes).map(({ s, e }) => `${s}-${e}`));
 		return transaction(['viewings', 'series'], 'readwrite', async ({ viewings, series }) => {
 			const record = await currentSeries(series, movieId);
-			const round = record?.round || 1;
-			const sessions = (await request(viewings.index('movieId').getAll(movieId)))
-				.filter(viewing => viewing.scope === 'episodes' && (viewing.round || 1) === round);
-			await dropEpisodes(viewings, sessions, keys);
+			for (const viewing of await episodeSessions(viewings, movieId, record?.round || 1)) {
+				const remaining = (viewing.episodes || []).filter(({ s, e }) => !keys.has(`${s}-${e}`));
+				if (remaining.length === (viewing.episodes || []).length) continue;
+				if (!remaining.length && !viewing.rating && !viewing.notes) await request(viewings.delete(viewing.id));
+				else await request(viewings.put({ ...viewing, episodes: remaining, updatedAt: new Date().toISOString() }));
+			}
 			// Con un episodio in meno la serie non è più finita.
 			if (record?.status === 'finished') await request(series.put({ ...record, status: 'watching', updatedAt: new Date().toISOString() }));
 		});
 	}
 
-	// Un episodio visto in una data, con la sua nota (testo semplice, '' per toglierla): se era già segnato in un altro
-	// giorno si sposta nella sessione di questa data. Come markEpisodes, la serie passa "in corso" ed esce dalla
-	// watchlist e dalla serata.
-	async function setEpisode(movieId, episode, { date, note = '' }) {
-		if (!DATE.test(String(date || ''))) throw new Error('Data non valida.');
+	// La visione di un singolo episodio già segnato, per aprirla nel diario. Se l'episodio sta in una visione di più
+	// episodi (versioni fino alla 0.5) ne esce e ne diventa una sua, con la stessa data, dove e con chi; voto e note
+	// restano a quella di prima. Restituisce l'id della visione, o null se l'episodio non è segnato.
+	async function splitEpisode(movieId, episode) {
 		const [item] = normalizeEpisodes([episode]);
 		if (!item) throw new Error('Episodio non valido.');
 		const key = `${item.s}-${item.e}`;
-		const text = String(note ?? '').trim();
-		if (text.length > MAX_EPISODE_NOTE) throw new Error(`La nota supera il limite di ${MAX_EPISODE_NOTE.toLocaleString('it-IT')} caratteri.`);
-		return transaction(['movies', 'viewings', 'series', 'watchlist', 'kv'], 'readwrite', async ({ movies, viewings, series, watchlist, kv }) => {
-			if (!(await request(movies.get(movieId)))) throw new Error('Titolo sconosciuto.');
+		return transaction(['viewings', 'series'], 'readwrite', async ({ viewings, series }) => {
+			const round = (await currentSeries(series, movieId))?.round || 1;
+			const session = (await episodeSessions(viewings, movieId, round))
+				.find(viewing => (viewing.episodes || []).some(({ s, e }) => `${s}-${e}` === key));
+			if (!session) return null;
+			if (session.episodes.length === 1) return session.id;
 			const stamp = new Date().toISOString();
-			const record = await currentSeries(series, movieId) || { movieId, status: 'watching', round: 1, startedAt: stamp };
-			const round = record.round || 1;
-			const sessions = (await request(viewings.index('movieId').getAll(movieId)))
-				.filter(viewing => viewing.scope === 'episodes' && (viewing.round || 1) === round);
-			const sameDay = sessions.find(viewing => viewing.date === date);
-			await dropEpisodes(viewings, sessions, new Set([key]), sameDay?.id);
-			const episodes = normalizeEpisodes([...(sameDay?.episodes || []), item]);
-			const episodeNotes = { ...(sameDay?.episodeNotes || {}) };
-			if (text) episodeNotes[key] = text;
-			else delete episodeNotes[key];
-			const viewing = sameDay
-				? { ...sameDay, episodes, episodeNotes: normalizeEpisodeNotes(episodeNotes, episodes), updatedAt: stamp }
-				: normalizeViewing({ movieId, date, scope: 'episodes', episodes, episodeNotes, round });
-			await request(viewings.put(viewing));
-			const nextRecord = { ...record, status: 'watching', updatedAt: stamp };
-			await request(series.put(nextRecord));
-			await request(watchlist.delete(movieId));
-			const planned = await getKv(kv, 'planned');
-			if (planned?.movieIds?.includes(movieId)) await putKv(kv, 'planned', { ...planned, movieIds: planned.movieIds.filter(id => id !== movieId) });
-			return { viewing, series: nextRecord };
+			await request(viewings.put({ ...session, episodes: session.episodes.filter(({ s, e }) => `${s}-${e}` !== key), updatedAt: stamp }));
+			const own = normalizeViewing({ movieId, date: session.date, place: session.place, withWhom: session.withWhom, scope: 'episodes', episodes: [item], round });
+			await request(viewings.put(own));
+			return own.id;
 		});
 	}
 
@@ -438,11 +417,14 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	}
 
 	// Nuova visione. Con removeFromWatchlist il titolo esce dalla watchlist (e dalla serata) nella stessa transazione.
+	// Per la visione di un episodio (scope 'episodes') la serie passa "in corso" ed esce da watchlist e serata, come
+	// con markEpisodes.
 	async function addViewing(input, { removeFromWatchlist: remove = false } = {}) {
 		const viewing = normalizeViewing(input);
-		await transaction(['movies', 'viewings', 'watchlist', 'kv'], 'readwrite', async ({ movies, viewings, watchlist, kv }) => {
+		await transaction(['movies', 'viewings', 'watchlist', 'kv', 'series'], 'readwrite', async ({ movies, viewings, watchlist, kv, series }) => {
 			if (!(await request(movies.get(viewing.movieId)))) throw new Error('Titolo sconosciuto: aggiungilo prima dalla ricerca.');
 			await request(viewings.put(viewing));
+			if (viewing.scope === 'episodes') return void await startWatching({ series, watchlist, kv }, viewing.movieId);
 			if (!remove) return;
 			await request(watchlist.delete(viewing.movieId));
 			const planned = await getKv(kv, 'planned');
@@ -519,7 +501,9 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	// - 'merge': per ogni voce vince quella modificata più di recente; le voci che ci sono da una parte sola restano.
 	async function restoreData(data, { mode = 'merge' } = {}) {
 		if (!['merge', 'replace'].includes(mode)) throw new Error('Modo di ripristino sconosciuto.');
+		const hasValidKey = settings => Boolean(settings?.omdbKey) && settings.omdbKeyStatus === 'valid';
 		return transaction(['movies', 'watchlist', 'viewings', 'series', 'kv'], 'readwrite', async ({ movies, watchlist, viewings, series, kv }) => {
+			const keyBefore = await getKv(kv, 'settings');
 			if (mode === 'replace') {
 				for (const objectStore of [movies, watchlist, viewings, series]) await request(objectStore.clear());
 				for (const key of ['planned', 'profile', 'settings', 'onboarding']) await request(kv.delete(key));
@@ -536,12 +520,19 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 			for (const viewing of data.viewings) await putNewer(viewings, viewing.id, viewing, item => String(item.updatedAt || item.createdAt || ''));
 			for (const record of data.series) await putNewer(series, record.movieId, record, item => String(item.updatedAt || ''));
 			for (const key of ['planned', 'profile', 'settings', 'onboarding']) {
-				const incoming = data[key];
+				// Senza impostazioni nel backup si passa da un record vuoto: serve a non perdere la chiave (sotto).
+				const incoming = data[key] || (key === 'settings' ? {} : null);
 				if (!incoming) continue;
 				const local = mode === 'merge' ? await getKv(kv, key) : null;
 				let next = !local || String(incoming.updatedAt || '') > String(local.updatedAt || '') ? incoming : local;
 				// L'onboarding fatto su uno dei due telefoni vale per entrambi.
 				if (key === 'onboarding' && (local?.done || incoming.done)) next = { ...next, done: true };
+				// Una chiave OMDb valida già su questo telefono non si perde per un backup che non ne ha una (per esempio
+				// fatto con le schede light): resta, con le schede complete. Vale anche per "Sostituisci tutto".
+				if (key === 'settings') {
+					const phone = mode === 'replace' ? keyBefore : local;
+					if (hasValidKey(phone) && !hasValidKey(next)) next = { ...next, detailMode: 'full', omdbKey: phone.omdbKey, omdbKeyStatus: 'valid', omdbPausedUntil: null };
+				}
 				await putKv(kv, key, next);
 			}
 			return { mode };
@@ -577,7 +568,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	}
 
 	return {
-		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, setEpisode, setSeriesStatus, restartSeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
+		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, splitEpisode, setSeriesStatus, restartSeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
 		addViewing, updateViewing, deleteViewing, getPoster, savePoster, posterIds, requestPersistence, importViewings, getImportJob, saveImportJob, clearImportJob, exportData, restoreData, STORES
 	};
 }

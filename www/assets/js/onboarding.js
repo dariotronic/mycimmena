@@ -5,7 +5,7 @@ import { escapeHtml } from './domain.js';
 import { hydrateIcons, icon } from './icons.js';
 import { showErrorToast } from './toasts.js';
 import { bindKeySetup, renderKeySetup } from './key-setup.js';
-import { bindMoviePicker } from './movie-picker.js';
+import { bindMoviePicker, renderMoviePicker } from './movie-picker.js';
 import { birthdayFields, COMPANY, LANGUAGES, PLACES, POPCORN, profileValues, SPECTATORS } from './profile.js';
 import { FILE_ACCEPT, importHowTo } from './import-ui.js';
 
@@ -171,11 +171,7 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 			<form class="onboarding-form onboarding-chat" data-ob-form>
 				<div class="field full">
 					<span class="field-label">Il tuo film del cuore</span>
-					${getData().favorite ? `<p class="help-text">Scelto: ${escapeHtml(getData().favorite.title)}</p>` : ''}
-					<div class="movie-picker" data-movie-picker>
-						<input type="search" placeholder="Cerca un titolo" aria-label="Cerca il tuo film del cuore" data-movie-picker-input>
-						<div class="movie-picker-results" data-movie-picker-results></div>
-					</div>
+					${renderMoviePicker(getData().favorite)}
 				</div>
 				<fieldset><legend>Dove guardi i film di solito?</legend>${chips('place', PLACES, profile().place)}</fieldset>
 				<fieldset><legend>Con chi?</legend>${chips('company', COMPANY, profile().company)}</fieldset>
@@ -264,13 +260,8 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 		root.innerHTML = VIEWS[step()]();
 		hydrateIcons(root);
 		if (step() === 'chat') {
-			bindMoviePicker(root, {
-				onPick: async movie => {
-					await store.saveMovie(movie);
-					await store.updateKv('profile', { favoriteMovieId: movie.id });
-					await refresh();
-				}
-			});
+			// Il film scelto entra nel catalogo; nel profilo va con "Avanti", insieme alle altre risposte.
+			bindMoviePicker(root, { onPick: movie => store.saveMovie(movie) });
 		}
 		if (step() === 'key') {
 			// Chiave valida: si resta qui con l'esito e il pulsante "Avanti"; si prosegue quando lo decide l'utente.

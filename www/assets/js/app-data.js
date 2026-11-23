@@ -1,7 +1,7 @@
 // Modello dati delle viste: da quello che c'è in store.js all'oggetto `data` che le viste leggono
 // (sul sito era la risposta del server). Niente DOM, così si testa da solo.
 import { detailModeOf } from './details.js';
-import { episodeDetails, formatEpisodes, nextEpisode, progress, watchedEpisodes } from './series.js';
+import { episodeDetails, episodeTitle, formatEpisodes, nextEpisode, progress, watchedEpisodes } from './series.js';
 
 // Un titolo del catalogo nel formato delle viste: `poster` è l'URL di IMDb, `poster_local` la copia sul telefono.
 // I dettagli (regista, trama…) arrivano da OMDb in modalità completa; in light ci sono gli attori principali di IMDb.
@@ -45,7 +45,7 @@ export function seriesProgress(state, movieId) {
 		round,
 		startedAt: record?.startedAt || null,
 		watched,
-		// Data e nota di ogni episodio visto (series.js, episodeDetails).
+		// Data, visione e nota di ogni episodio visto (series.js, episodeDetails).
 		episodes: episodeDetails(state?.viewings || [], movieId, round),
 		seasons,
 		next,
@@ -55,7 +55,11 @@ export function seriesProgress(state, movieId) {
 
 // Etichetta di una visione nel diario: per le serie dice cosa si è visto o votato.
 export function viewingLabel(viewing, seasons = null) {
-	if (viewing.scope === 'episodes') return formatEpisodes(viewing.episodes, seasons) || 'Episodi';
+	if (viewing.scope === 'episodes') {
+		// Un episodio solo (dalla 0.6 è sempre così): anche il titolo, se si conosce.
+		const title = viewing.episodes?.length === 1 ? episodeTitle(seasons, viewing.episodes[0]) : '';
+		return `${formatEpisodes(viewing.episodes, seasons) || 'Episodi'}${title ? ` «${title}»` : ''}`;
+	}
 	if (viewing.scope === 'season') return `Stagione ${viewing.season}`;
 	if (viewing.scope === 'series') return 'Voto alla serie';
 	return '';

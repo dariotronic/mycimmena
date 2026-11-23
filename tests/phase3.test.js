@@ -229,6 +229,26 @@ test('merges a backup: the most recently changed entry wins and nothing is lost'
 	await assert.rejects(store.restoreData(backup, { mode: 'boh' }), /sconosciuto/);
 });
 
+test('keeps a valid OMDb key of this phone when the backup has none, in both modes', async () => {
+	for (const mode of ['merge', 'replace']) {
+		const store = freshStore();
+		await store.updateKv('onboarding', { step: 'import' });
+		// Chiave appena verificata nell'onboarding; il backup viene da un telefono con le schede light, più recente.
+		await store.updateKv('settings', { detailMode: 'full', omdbKey: 'abcd1234', omdbKeyStatus: 'valid' });
+		const backup = { movies: [], watchlist: [], viewings: [], series: [], planned: null, profile: { name: 'Dario' }, onboarding: null,
+			settings: { detailMode: 'light', backupReminder: false, updatedAt: '2999-01-01T00:00:00.000Z' } };
+		await store.restoreData(backup, { mode });
+		const { settings } = await store.loadAll();
+		assert.equal(settings.omdbKey, 'abcd1234', mode);
+		assert.equal(settings.omdbKeyStatus, 'valid', mode);
+		assert.equal(settings.detailMode, 'full', mode);
+		assert.equal(settings.backupReminder, false, `${mode}: il resto delle impostazioni viene dal backup`);
+		// Backup senza impostazioni: la chiave resta lo stesso.
+		await store.restoreData({ ...backup, settings: null }, { mode });
+		assert.equal((await store.loadAll()).settings.omdbKey, 'abcd1234', `${mode}, senza impostazioni`);
+	}
+});
+
 test('reminds about the backup after 30 days with new data, at most once a day', () => {
 	const now = Date.parse('2026-11-23T10:00:00Z');
 	const state = {

@@ -129,6 +129,13 @@ test('shows profile, detail mode, key actions, info page and credit in Settings'
 	// Senza nome si saluta e basta; senza compleanno gli auguri sono spenti e l'interruttore non si usa.
 	const anonymous = makeViews(buildAppData({ ...state, profile: {} })).renderSettings();
 	assert.match(anonymous, /<p>Ciao!<\/p>/);
+	// Film del cuore: card con la croce se c'è, altrimenti la ricerca; si salva con il resto del profilo.
+	assert.match(waiting, /<input type="hidden" name="favoriteMovieId" value="tt0084787">/);
+	assert.match(waiting, /data-movie-picker-chosen>[\s\S]*The Thing[\s\S]*data-movie-picker-clear/);
+	assert.match(waiting, /data-movie-picker-search hidden>/);
+	assert.match(anonymous, /name="favoriteMovieId" value="">/);
+	assert.match(anonymous, /data-movie-picker-chosen hidden>/);
+	assert.match(readFileSync(new URL('../www/assets/js/settings.js', import.meta.url), 'utf8'), /bindMoviePicker\(form, \{ onPick: movie => store\.saveMovie\(movie\) \}\)/, 'scegliere il film non salva il profilo');
 	assert.doesNotMatch(anonymous, /Senza nome/);
 	assert.match(anonymous, /aria-checked="false" aria-labelledby="notify-birthday-label" data-notify="notifyBirthday" disabled>/);
 	assert.match(waiting, /Purista della lingua originale · Commento tutto · 🍿/);
