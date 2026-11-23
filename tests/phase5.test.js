@@ -164,3 +164,25 @@ test('uses the recoloured Club logo (proposal A, "Velluto") as the app icon', as
 	assert.deepEqual([foreground.readUInt32BE(16), foreground.readUInt32BE(20), foreground[25]], [432, 432, 6], 'primo piano 432×432 con trasparenza');
 	assert.match(read('../android/app/src/main/res/values/styles.xml').toString(), /windowSplashScreenBackground">@color\/ic_launcher_background/);
 });
+
+test('opens the phone calendar and the Android share menu instead of downloading in the app', async () => {
+	const { addMeetingToCalendar } = await import('../www/assets/js/calendar-file.js');
+	const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
+	let event = null;
+	globalThis.Capacitor = { isNativePlatform: () => true, Plugins: { Calendar: { addEvent: async options => { event = options; } } } };
+	try {
+		const meeting = { date: '2026-11-26', place: 'Casa', movies: [{ title: 'Bad Taste', year: '1987' }] };
+		assert.equal(await addMeetingToCalendar(meeting, movie => `${movie.title} (${movie.year})`), 'opened');
+		assert.deepEqual(event, { date: '2026-11-26', title: 'Serata film · myCimmena', location: 'Casa', description: 'In programma:\nBad Taste (1987)' });
+		assert.equal(await addMeetingToCalendar({ place: 'Casa' }, String), false, 'senza data niente calendario');
+	} finally {
+		delete globalThis.Capacitor;
+	}
+	const java = read('../android/app/src/main/java/it/mycimmena/app/CalendarPlugin.java');
+	assert.match(java, /@CapacitorPlugin\(name = "Calendar"\)/);
+	assert.match(java, /new Intent\(Intent\.ACTION_INSERT\)\s*\.setData\(CalendarContract\.Events\.CONTENT_URI\)/);
+	assert.match(read('../android/app/src/main/java/it/mycimmena/app/MainActivity.java'), /registerPlugin\(CalendarPlugin\.class\)/);
+	const share = read('../www/assets/js/share.js');
+	assert.match(share, /plugins\.Filesystem\.writeFile\(\{ path: fileName, data: await blobToBase64\(blob\), directory: 'CACHE' \}\)/);
+	assert.match(share, /plugins\.Share\.share\(\{ title: 'La prossima serata', files: \[uri\]/);
+});

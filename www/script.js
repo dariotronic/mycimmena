@@ -12,7 +12,7 @@ import { createViews } from './assets/js/views.js';
 import { emptyState } from './assets/js/components.js';
 import { hydrateIcons } from './assets/js/icons.js';
 import { showErrorToast, showToast } from './assets/js/toasts.js';
-import { downloadMeetingIcs } from './assets/js/calendar-file.js';
+import { addMeetingToCalendar } from './assets/js/calendar-file.js';
 import { initColorMode } from './assets/js/theme.js';
 import { createNavigation, route, updateBackToTopButton } from './assets/js/navigation.js';
 import { createDialogs } from './assets/js/dialogs.js';
@@ -306,8 +306,11 @@ function bindViewEvents() {
 			if (outcome === 'downloaded') showToast('shareDownloaded');
 		}).catch(showErrorToast);
 	});
+	// Nell'app si apre il calendario con l'evento già compilato; nel browser si scarica il file .ics.
 	document.getElementById('calendar-home')?.addEventListener('click', () => {
-		if (downloadMeetingIcs(data.upcoming, movieName)) showToast('calendarDownloaded');
+		addMeetingToCalendar(data.upcoming, movieName).then(outcome => {
+			if (outcome === 'downloaded') showToast('calendarDownloaded');
+		}).catch(showErrorToast);
 	});
 	meetingActions.bind();
 	watchlist.bind();

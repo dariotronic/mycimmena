@@ -55,6 +55,23 @@ export function buildMeetingIcs(meeting, movieName, now = new Date()) {
 	return `${lines.map(foldIcsLine).join('\r\n')}\r\n`;
 }
 
+// Nell'app Android apre la schermata "nuovo evento" del calendario, già compilata (CalendarPlugin.java): la WebView
+// non scarica file, e un .ics "scaricato" lì non andava da nessuna parte. Nel browser scarica il file .ics.
+// Restituisce 'opened', 'downloaded' o false (serata senza data).
+export async function addMeetingToCalendar(meeting, movieName) {
+	if (!meeting?.date) return false;
+	const calendar = globalThis.Capacitor?.isNativePlatform?.() ? globalThis.Capacitor.Plugins?.Calendar : null;
+	if (!calendar?.addEvent) return downloadMeetingIcs(meeting, movieName) ? 'downloaded' : false;
+	const titles = (meeting.movies || []).map(movieName);
+	await calendar.addEvent({
+		date: meeting.date,
+		title: 'Serata film · myCimmena',
+		location: meeting.place || '',
+		description: titles.length ? `In programma:\n${titles.join('\n')}` : ''
+	});
+	return 'opened';
+}
+
 export function downloadMeetingIcs(meeting, movieName) {
 	const content = buildMeetingIcs(meeting, movieName);
 	if (!content) return false;

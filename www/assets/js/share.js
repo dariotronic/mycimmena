@@ -316,6 +316,16 @@ async function createHomeShareImage(meeting, formatDate, meetingMovies) {
 }
 
 // Restituisce l'esito ('shared', 'downloaded', 'cancelled') per i toast; in caso di errore rilancia l'eccezione.
+// Il PNG in base64 (senza il prefisso "data:"), come lo vuole Filesystem.writeFile per i file binari.
+function blobToBase64(blob) {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(String(reader.result).replace(/^data:[^,]*,/, ''));
+		reader.onerror = () => reject(reader.error || new Error('Non è stato possibile preparare l’immagine.'));
+		reader.readAsDataURL(blob);
+	});
+}
+
 export async function shareHome(meeting, formatDate, meetingMovies) {
 	const button = document.getElementById('share-home');
 	if (!button || !meeting || button.disabled) return null;
@@ -328,6 +338,19 @@ export async function shareHome(meeting, formatDate, meetingMovies) {
 			throw new Error(error.message || 'Non è stato possibile preparare l’immagine da condividere.');
 		}
 		const fileName = 'prossima-serata.png';
+		// Nell'app Android: l'immagine va nella cache dell'app e si apre il menu Condividi di Android. La WebView non
+		// condivide file e non scarica: prima finiva nel "download" e spariva.
+		const plugins = globalThis.Capacitor?.isNativePlatform?.() ? globalThis.Capacitor.Plugins : null;
+		if (plugins?.Filesystem && plugins?.Share) {
+			const { uri } = await plugins.Filesystem.writeFile({ path: fileName, data: await blobToBase64(blob), directory: 'CACHE' });
+			try {
+				await plugins.Share.share({ title: 'La prossima serata', files: [uri], dialogTitle: 'Condividi la prossima serata' });
+			} catch (error) {
+				if (/cancel/i.test(String(error?.message || error))) return 'cancelled';
+				throw error;
+			}
+			return 'shared';
+		}
 		const file = typeof File === 'function' ? new File([blob], fileName, { type: 'image/png' }) : null;
 		if (file && navigator.canShare && navigator.share) {
 			try {
