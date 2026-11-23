@@ -55,7 +55,8 @@ export function posterButton(movie, className, extraClass = '') {
 // `saveHype` salva il voto dell'Hypometro e ricarica i dati; `onVotesChanged` (facoltativo) gira dopo ogni voto salvato:
 // la watchlist si riordina e rifiltra. `renderMyViewings` disegna "I miei voti" e `openViewing` apre il diario.
 // `renderSeries` disegna la sezione Episodi delle serie (series-ui.js); `onShow` gira a ogni apertura (dettagli OMDb, stagioni).
-export function createMovieInfo({ app, openImageLightbox, getData = () => ({ movies: [] }), saveHype, renderMyViewings = () => '', renderSeries = () => '', onShow = () => {}, openViewing = () => {}, onVotesChanged = () => {} }) {
+// `scheduleMovie` aggiunge il titolo alla prossima serata (il pulsante sta sotto l'Hypometro).
+export function createMovieInfo({ app, openImageLightbox, getData = () => ({ movies: [] }), saveHype, renderMyViewings = () => '', renderSeries = () => '', onShow = () => {}, openViewing = () => {}, onVotesChanged = () => {}, scheduleMovie = async () => {} }) {
 	const movieInfoDialog = document.getElementById('movie-info-dialog');
 	const movieInfoClose = document.getElementById('movie-info-close');
 	const movieInfoPoster = document.getElementById('movie-info-poster');
@@ -198,8 +199,13 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 					aria-valuetext="${escapeHtml(hypeText(votes.mine))}">
 				<div class="movie-vote-scale" aria-hidden="true">${scale}</div>
 			</div>
+			${isScheduled(movieId)
+				? `<p class="movie-info-scheduled">${icon('movie')}<span>Nella prossima serata</span></p>`
+				: `<button class="button secondary movie-info-schedule" type="button" data-schedule-movie="${escapeHtml(movieId)}">${icon('movie')}<span>Aggiungi alla prossima serata</span></button>`}
 		`;
+		hydrateIcons(movieInfoVote);
 	}
+	const isScheduled = movieId => (getData().upcoming?.movies || []).some(movie => movie.id === movieId);
 
 	// Sotto il titolo dell'Hypometro: il livello in parole ("Volentieri"), o l'invito a votare.
 	const voteLabel = score => (score === null ? 'Quanta voglia hai di vederlo?' : hypeLevel(score).label);
@@ -312,7 +318,14 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 		event.preventDefault();
 		if (score !== targetVote) saveVote(movieInfoDialog.dataset.movieId, snapVote(range, score));
 	});
-	movieInfoVote.addEventListener('click', event => {
+	movieInfoVote.addEventListener('click', async event => {
+		const schedule = event.target.closest('[data-schedule-movie]');
+		if (schedule) {
+			schedule.disabled = true;
+			await scheduleMovie(schedule.dataset.scheduleMovie);
+			refreshMovieInfo();
+			return;
+		}
 		const step = event.target.closest('[data-hype-score]');
 		const range = document.getElementById('movie-vote-range');
 		if (!step || !range) return;

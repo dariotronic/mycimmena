@@ -21,7 +21,6 @@ export const TOASTS = {
 	meetingCompleted: { enabled: true, message: ({ count }) => count === 1 ? 'Serata nel diario: ora puoi dare il voto' : 'Serata nel diario: ora puoi dare i voti' },
 	meetingCleared: { enabled: true, message: 'Serata rimossa' },
 	movieScheduled: { enabled: true, message: 'Aggiunto alla serata' },
-	movieUnscheduled: { enabled: true, message: 'Rimosso dalla serata' },
 
 	// Randomizer
 	// Il film estratto non ha un toast (lo annuncia agli screen reader randomizer.js); lo scarto sì.

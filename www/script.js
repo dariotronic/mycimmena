@@ -80,7 +80,8 @@ const { infoButton, titleWithInfo, refreshMovieInfo } = createMovieInfo({
 		if (movie.type === 'series') details.ensureSeasons(movie.id, [1, data.seriesOf(movie.id).next?.s || 1]);
 	},
 	openViewing: target => diary.openViewingForm(target),
-	onVotesChanged: () => watchlist.updateWatchlistRows()
+	onVotesChanged: () => watchlist.updateWatchlistRows(),
+	scheduleMovie: movieId => meetingActions.scheduleMovie(movieId)
 });
 // Le viste leggono lo stato dai moduli che lo possiedono. I getter vengono chiamati solo al render,
 // quando tutti i moduli qui sotto esistono già.
@@ -151,7 +152,7 @@ const onboarding = createOnboarding({
 	details,
 	getData,
 	refresh: loadData,
-	openBackup: () => backup.open(),
+	openBackup: options => backup.open(options),
 	openImport: options => importer.open(options),
 	onProfileSaved: askNotifications,
 	onFinish: () => {
@@ -165,7 +166,7 @@ const randomizer = createRandomizer({
 	selectableMovies: () => meetingActions.selectableMovies(),
 	scheduleMovie: movieId => meetingActions.scheduleMovie(movieId)
 });
-const meetingActions = createMeeting({ store, getData, render, loadData, askConfirmation, runUndoable, flushUndoable, clearSelectedMovie: randomizer.clearSelectedMovie, onPlannedSaved: () => getData().upcoming?.date && askNotifications() });
+const meetingActions = createMeeting({ store, getData, render, loadData, askConfirmation, runUndoable, flushUndoable, clearSelectedMovie: randomizer.clearSelectedMovie, renderMeetingForm: () => viewRenderer.renderMeetingForm(), onPlannedSaved: () => getData().upcoming?.date && askNotifications() });
 const watchlist = createWatchlist({
 	getData,
 	viewRenderer,
@@ -228,11 +229,11 @@ async function updateNotifyStatus() {
 	status.textContent = state === 'denied' ? 'Android blocca le notifiche di myCimmena: riattivale da Impostazioni di Android → App → myCimmena → Notifiche.' : '';
 }
 
-const ROUTE_TITLES = { home: 'Home', calendario: 'Serata', diario: 'Diario', statistiche: 'Statistiche', prossimi: 'Randomizer', lista: 'Watchlist', impostazioni: 'Impostazioni', informazioni: 'Informazioni' };
+const ROUTE_TITLES = { home: 'Home', diario: 'Diario', statistiche: 'Statistiche', prossimi: 'Randomizer', lista: 'Watchlist', impostazioni: 'Impostazioni', informazioni: 'Informazioni' };
 // Anno scelto nelle statistiche ('' = tutto il diario).
 let statsYear = '';
-// Nomi delle pagine sul sito: un link salvato porta comunque alla pagina giusta.
-const OLD_ROUTES = { profilo: 'impostazioni', archivio: 'diario' };
+// Nomi delle pagine sul sito (e la vecchia pagina Serata, ora in Home): un link salvato porta comunque alla pagina giusta.
+const OLD_ROUTES = { profilo: 'impostazioni', archivio: 'diario', calendario: 'home' };
 
 function render() {
 	if (OLD_ROUTES[route()]) {
@@ -242,7 +243,6 @@ function render() {
 	updateDocumentTitle();
 	const views = {
 		home: viewRenderer.renderHome,
-		calendario: viewRenderer.renderCalendar,
 		diario: viewRenderer.renderDiary,
 		statistiche: () => `${pageHeader('Statistiche', 'Il tuo diario in numeri.')}<div class="stats-page">${renderStats(data, { year: statsYear, today: today(), formatDate })}</div>`,
 		prossimi: viewRenderer.renderComingFilms,

@@ -98,7 +98,7 @@ test('lists the diary by day, newest first, with ratings, notes and a title sear
 	assert.match(html, /9 spipe e ½ su 10/);
 	assert.match(html, /Senza voto/);
 	assert.match(html, /<p class="diary-meta">con Anna<\/p>/);
-	assert.match(html, /<div class="review-content diary-notes"><p>Ancora meglio<\/p><\/div>/);
+	assert.match(html, /<p class="review-content diary-notes">Ancora meglio<\/p>/, 'nel diario solo una riga di testo della nota');
 	assert.match(html, /class="icon-button small viewing-edit" data-viewing-id="b"/);
 	const empty = makeViews(buildAppData({ ...state, viewings: [] })).renderDiary();
 	assert.match(empty, /Il diario è vuoto/);
@@ -154,7 +154,9 @@ test('asks how a past evening went and summarizes the home page otherwise', () =
 test('adds "mark as seen" to every watchlist row', () => {
 	const html = makeViews(buildAppData(state)).renderMovieRows();
 	assert.match(html, /class="button secondary icon-only mark-seen" data-movie-id="tt1"[^>]*aria-label="Segna Alien come visto"/);
-	assert.match(html, /aria-label="Aggiungi Alien alla serata" title="Aggiungi alla serata"/);
+	// "Aggiungi alla serata" sta solo nella scheda del titolo, sotto l'Hypometro: sulle righe c'erano troppe icone.
+	assert.doesNotMatch(html, /schedule-movie|alla serata/);
+	assert.match(readFileSync(new URL('../www/assets/js/movie-info.js', import.meta.url), 'utf8'), /data-schedule-movie="\$\{escapeHtml\(movieId\)\}">\$\{icon\('movie'\)\}<span>Aggiungi alla prossima serata<\/span>/);
 });
 
 test('wires the diary, search, posters and evening to the local store', () => {

@@ -67,6 +67,7 @@ test('plans the birthday wishes and the evening reminder at 9', () => {
 	assert.deepEqual(nextBirthday('1990-11-23', new Date(2026, 10, 23, 8, 0)), new Date(2026, 10, 23, 9, 0));
 	assert.deepEqual(nextBirthday('1992-02-29', now), new Date(2027, 1, 28, 9, 0), '29 febbraio negli anni non bisestili');
 	assert.equal(nextBirthday('', now), null);
+	assert.deepEqual(nextBirthday('12-25', now), new Date(2026, 11, 25, 9, 0), 'compleanno senza anno');
 	const data = {
 		profile: { name: 'Dario', birthday: '1990-12-25' },
 		favorite: { title: 'The Thing', year: '1982' },

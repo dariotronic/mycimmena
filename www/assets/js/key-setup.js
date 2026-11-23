@@ -21,11 +21,19 @@ async function readClipboard() {
 	return '';
 }
 
-export function renderKeySetup({ later = true } = {}) {
+// `verified`: la chiave è già stata provata e funziona (onboarding, dopo la verifica): lo si dice al posto del modulo.
+export function renderKeySetup({ later = true, verified = false } = {}) {
+	if (verified) {
+		return `
+			<div class="key-setup" data-key-setup>
+				<p class="key-verified" role="status"><strong>La chiave funziona ✓</strong> Le schede complete sono attive: puoi andare avanti.</p>
+			</div>
+		`;
+	}
 	return `
 		<div class="key-setup" data-key-setup>
 			<ol class="key-steps">
-				<li><p><strong>Registrati su OMDb</strong>, il servizio che fornisce trama, regista, cast e gli episodi delle serie. È gratuito: scegli <em>FREE</em>, scrivi la tua mail e premi <em>Submit</em>.</p>
+				<li><p><strong>Registrati su OMDb</strong>, il servizio che fornisce trama, regista, cast e gli episodi delle serie. È gratuito: <strong>scegli <em>FREE</em></strong>, scrivi la tua mail e premi <em>Submit</em>.</p>
 					<button class="button secondary" type="button" data-key-open>Apri la pagina di registrazione</button>
 				</li>
 				<li><p><strong>Controlla la mail:</strong> arrivano la chiave e un link di attivazione da cliccare. Con Hotmail e Outlook può volerci fino a un'ora; guarda anche nella posta indesiderata.</p></li>
@@ -48,7 +56,7 @@ export function renderKeySetup({ later = true } = {}) {
 // `onLater` per "La inserisco più tardi".
 export function bindKeySetup(root, { useKey, onDone = () => {}, onLater = () => {} }) {
 	const container = root.querySelector('[data-key-setup]');
-	if (!container) return () => {};
+	if (!container?.querySelector('[data-key-form]')) return () => {};
 	const form = container.querySelector('[data-key-form]');
 	const input = form.elements.key;
 	const status = container.querySelector('[data-key-status]');

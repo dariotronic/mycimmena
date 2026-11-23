@@ -54,5 +54,52 @@ export function flavourLine(profile) {
 	return line ? line[0].toUpperCase() + line.slice(1) : '';
 }
 
-// Oggi è il compleanno? `birthday` è "AAAA-MM-GG" (l'anno conta solo per l'età, che l'app non mostra).
-export const isBirthday = (birthday, todayDate) => Boolean(birthday) && birthday.slice(5) === String(todayDate).slice(5);
+// Compleanno: si chiedono solo giorno e mese ("MM-GG"); i profili salvati prima hanno ancora "AAAA-MM-GG".
+// L'anno non serve: l'app fa gli auguri, non conta gli anni.
+export const MONTHS = Object.freeze(['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre']);
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+// "MM-GG" da un compleanno salvato in uno dei due formati, o '' se manca o non è valido.
+export function birthdayMonthDay(value) {
+	const match = /^(?:\d{4}-)?(\d{2})-(\d{2})$/.exec(String(value || ''));
+	if (!match) return '';
+	const month = Number(match[1]);
+	const day = Number(match[2]);
+	return month >= 1 && month <= 12 && day >= 1 && day <= DAYS_IN_MONTH[month - 1] ? `${match[1]}-${match[2]}` : '';
+}
+
+// Dai due menu "Giorno" e "Mese" al valore da salvare: "MM-GG", o '' se ne manca uno (o il giorno non esiste).
+export function birthdayFromParts(day, month) {
+	const d = Number(day);
+	const m = Number(month);
+	if (!(m >= 1 && m <= 12 && d >= 1)) return '';
+	return birthdayMonthDay(`${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+}
+
+// I due menu del compleanno (onboarding e Impostazioni). `id` è il prefisso degli id dei campi.
+export function birthdayFields(id, value) {
+	const monthDay = birthdayMonthDay(value);
+	const [month, day] = monthDay ? monthDay.split('-').map(Number) : [0, 0];
+	return `
+		<div class="birthday-fields">
+			<select id="${id}-day" name="birthdayDay" aria-label="Giorno del compleanno">
+				<option value="">Giorno</option>
+				${Array.from({ length: 31 }, (_, index) => `<option value="${index + 1}"${index + 1 === day ? ' selected' : ''}>${index + 1}</option>`).join('')}
+			</select>
+			<select id="${id}-month" name="birthdayMonth" aria-label="Mese del compleanno">
+				<option value="">Mese</option>
+				${MONTHS.map((name, index) => `<option value="${index + 1}"${index + 1 === month ? ' selected' : ''}>${name}</option>`).join('')}
+			</select>
+		</div>
+	`;
+}
+
+// Valori di un modulo del profilo: i due menu del compleanno diventano `birthday`.
+export function profileValues(values) {
+	if (!('birthdayDay' in values) && !('birthdayMonth' in values)) return values;
+	const { birthdayDay, birthdayMonth, ...rest } = values;
+	return { ...rest, birthday: birthdayFromParts(birthdayDay, birthdayMonth) };
+}
+
+// Oggi è il compleanno?
+export const isBirthday = (birthday, todayDate) => Boolean(birthdayMonthDay(birthday)) && birthdayMonthDay(birthday) === String(todayDate).slice(5);

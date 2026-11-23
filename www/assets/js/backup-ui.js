@@ -27,7 +27,8 @@ export function backupReminderDue(state, now = Date.now()) {
 	return stamps.some(value => value > lastBackup);
 }
 
-export function renderBackupBody({ data, pending = null, error = '' }) {
+// `restoreOnly`: dall'onboarding si vuole solo ripristinare, quindi niente sezione "Esporta".
+export function renderBackupBody({ data, pending = null, error = '', restoreOnly = false }) {
 	const last = data.meta?.lastBackupAt;
 	const hasKey = Boolean(data.settings?.omdbKey);
 	if (pending) {
@@ -46,6 +47,15 @@ export function renderBackupBody({ data, pending = null, error = '' }) {
 			</section>
 		`;
 	}
+	const restoreSection = `
+		<section class="backup-section" aria-labelledby="backup-import-title">
+			<h3 id="backup-import-title">Ripristina</h3>
+			<p>Da un file <code>mycimmena-backup-….json</code>, per esempio dopo aver cambiato telefono.</p>
+			<label class="button${restoreOnly ? '' : ' secondary'} file-button">Scegli il file di backup<input type="file" accept="application/json,.json,text/plain" data-backup-file></label>
+		</section>
+		${error ? `<p class="status-message error" role="alert">${escapeHtml(error)}</p>` : ''}
+	`;
+	if (restoreOnly) return restoreSection;
 	return `
 		<section class="backup-section" aria-labelledby="backup-export-title">
 			<h3 id="backup-export-title">Esporta</h3>
@@ -57,12 +67,7 @@ export function renderBackupBody({ data, pending = null, error = '' }) {
 				${isNative() ? '<button class="button secondary" type="button" data-backup-export="share">Condividi…</button>' : ''}
 			</div>
 		</section>
-		<section class="backup-section" aria-labelledby="backup-import-title">
-			<h3 id="backup-import-title">Ripristina</h3>
-			<p>Da un file <code>mycimmena-backup-….json</code>, per esempio dopo aver cambiato telefono.</p>
-			<label class="button secondary file-button">Scegli il file di backup<input type="file" accept="application/json,.json,text/plain" data-backup-file></label>
-		</section>
-		${error ? `<p class="status-message error" role="alert">${escapeHtml(error)}</p>` : ''}
+		${restoreSection}
 	`;
 }
 
@@ -72,17 +77,30 @@ export function createBackupUi({ store, getData, getState, refresh, askConfirmat
 	let pending = null;
 	let error = '';
 	let busy = false;
+	let restoreOnly = false;
+	// Dall'onboarding: riceve l'esito ({ ok, text } o { ok: false, message }) prima che l'app si ridisegni.
+	let onResult = null;
 
 	function draw() {
-		body.innerHTML = renderBackupBody({ data: getData(), pending, error });
+		body.innerHTML = renderBackupBody({ data: getData(), pending, error, restoreOnly });
 		hydrateIcons(body);
 	}
 
-	function open() {
+	function open({ onResult: report = null } = {}) {
 		pending = null;
 		error = '';
+		onResult = report;
+		restoreOnly = Boolean(report);
 		draw();
 		if (!dialog.open) dialog.showModal();
+	}
+
+	// Ripristino non riuscito durante l'onboarding: la finestra si chiude e l'avviso compare nella schermata.
+	async function reportFailure(message) {
+		const report = onResult;
+		dialog.close();
+		await report?.({ ok: false, message });
+		await refresh();
 	}
 
 	async function exportBackup(how) {
@@ -104,6 +122,7 @@ export function createBackupUi({ store, getData, getState, refresh, askConfirmat
 			pending = parseBackup(await file.text());
 		} catch (problem) {
 			error = problem.message;
+			if (onResult) return void await reportFailure(problem.message);
 		}
 		draw();
 	}
@@ -111,8 +130,16 @@ export function createBackupUi({ store, getData, getState, refresh, askConfirmat
 	async function restore(mode) {
 		if (!pending) return;
 		if (mode === 'replace' && !(await askConfirmation('I dati di questo telefono verranno sostituiti da quelli del backup. Continuare?'))) return;
-		await store.restoreData(pending.data, { mode });
+		const text = describeBackup(pending.summary, formatDate);
+		try {
+			await store.restoreData(pending.data, { mode });
+		} catch (problem) {
+			if (onResult) return void await reportFailure(problem.message);
+			throw problem;
+		}
 		pending = null;
+		const report = onResult;
+		await report?.({ ok: true, text });
 		await refresh();
 		dialog.close();
 		showToast('backupRestored', { mode });
@@ -144,6 +171,7 @@ export function createBackupUi({ store, getData, getState, refresh, askConfirmat
 	document.getElementById('backup-close').addEventListener('click', () => dialog.close());
 	dialog.addEventListener('close', () => {
 		pending = null;
+		onResult = null;
 		body.innerHTML = '';
 	});
 

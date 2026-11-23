@@ -65,8 +65,8 @@ test('uses the Rome calendar day rather than UTC near midnight', () => {
 	assert.equal(today(new Date('2026-12-31T23:30:00Z')), '2027-01-01');
 });
 
-test('renders calendar form markup without patch artifacts', () => {
-	const html = makeViews({ isAuthorized: () => true }).renderCalendar();
+test('renders the evening form markup without patch artifacts', () => {
+	const html = makeViews({ isAuthorized: () => true }).renderMeetingForm();
 	assert.match(html, /<form id="calendar-form"/);
 	assert.doesNotMatch(html, /^\+/m);
 });
@@ -217,7 +217,6 @@ test('uses the same page header component across every view', () => {
 	const views = makeViews();
 	const renderers = [
 		views.renderHome,
-		views.renderCalendar,
 		views.renderDiary,
 		views.renderComingFilms,
 		views.renderMovieList,
@@ -243,16 +242,16 @@ test('provides an accessible, persisted color-mode switch for desktop and touch 
 	assert.match(styles, /--paper: #141114;/);
 });
 
-test('keeps the settings route in touch navigation, with the evening always visible', () => {
+test('keeps the settings route in touch navigation; the evening lives in Home', () => {
 	const page = readFileSync(new URL('../www/index.html', import.meta.url), 'utf8');
 	const touchNav = page.match(/<nav class="touch-nav"[\s\S]*?<\/nav>/)?.[0];
 	assert.ok(touchNav);
 	const items = [...touchNav.matchAll(/data-route="([^"]+)"|class="touch-nav-home"|data-theme-toggle/g)]
 		.map(([, route]) => route || 'home');
-	assert.deepEqual(items, ['calendario', 'prossimi', 'diario', 'lista', 'impostazioni', 'home']);
+	assert.deepEqual(items, ['prossimi', 'diario', 'lista', 'impostazioni', 'home']);
 	assert.doesNotMatch(touchNav, / hidden>/);
 	const styles = readFileSync(new URL('../www/style.css', import.meta.url), 'utf8');
-	assert.match(styles, /\.touch-nav \{[^}]*grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
+	assert.match(styles, /\.touch-nav \{[^}]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
 });
 
 test('provides Material Icons for both color modes', () => {
@@ -344,10 +343,10 @@ test('renders cards with only the poster and evenly spaced action controls', () 
 	assert.doesNotMatch(html, /movie-title|movie-director|movie-year/);
 	assert.match(html, /movie-info-trigger/);
 	assert.match(html, /remove-movie/);
-	assert.match(html, /schedule-movie/);
+	assert.doesNotMatch(html, /schedule-movie/);
 });
 
-test('makes posters open movie details in home, calendar, diary, randomizer, and list views', () => {
+test('makes posters open movie details in home, diary, randomizer, and list views', () => {
 	const movie = { id: 'tt1', title: 'Alien', year: 1979 };
 	const views = makeViews({
 		getData: () => ({ upcoming: { date: '2026-10-30', place: 'Cinema', movies: [movie] }, viewings: [{ id: 'v1', movieId: 'tt1', date: '2026-10-20', rating: 8, movie }], movies: [movie] }),
@@ -355,7 +354,7 @@ test('makes posters open movie details in home, calendar, diary, randomizer, and
 		selectableMovies: () => [movie],
 		poster: (_movie, className = 'movie-poster') => `<img class="${className}">`
 	});
-	for (const html of [views.renderHome(), views.renderCalendar(), views.renderDiary(), views.renderComingFilms(), views.renderMovieRows()]) {
+	for (const html of [views.renderHome(), views.renderDiary(), views.renderComingFilms(), views.renderMovieRows()]) {
 		assert.match(html, /class="movie-poster-trigger[^\"]*" data-movie-id="tt1" type="button" aria-label="Apri i dettagli di Alien"/);
 	}
 	const script = readAppScripts();

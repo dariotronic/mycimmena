@@ -188,7 +188,6 @@ export function createWatchlist({ getData, viewRenderer, scheduleMovie, clearSel
 
 	function bindMovieActionEvents(root = document) {
 		root.querySelectorAll('.remove-movie').forEach(button => button.addEventListener('click', () => removeMovie(button.dataset.movieId)));
-		root.querySelectorAll('.schedule-movie').forEach(button => button.addEventListener('click', () => scheduleMovie(button.dataset.movieId)));
 	}
 
 	function removeMovie(id) {

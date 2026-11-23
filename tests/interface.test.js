@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { buildAppData } from '../www/assets/js/app-data.js';
 import { contentType, escapeHtml, meetingMovies, movieName } from '../www/assets/js/domain.js';
-import { diaryDefaults, flavourLine, isBirthday } from '../www/assets/js/profile.js';
+import { birthdayFromParts, birthdayMonthDay, diaryDefaults, flavourLine, isBirthday, profileValues } from '../www/assets/js/profile.js';
 import { renderSeriesSection, renderWatchingRow } from '../www/assets/js/series-ui.js';
 import { customStructure } from '../www/assets/js/series.js';
 import { STEPS } from '../www/assets/js/onboarding.js';
@@ -52,6 +52,14 @@ test('turns onboarding answers into diary defaults, a flavour line and birthday 
 	assert.equal(isBirthday('1990-11-22', '2026-11-22'), true);
 	assert.equal(isBirthday('1990-11-21', '2026-11-22'), false);
 	assert.equal(isBirthday('', '2026-11-22'), false);
+	// Dal 0.6 si chiedono solo giorno e mese.
+	assert.equal(isBirthday('11-22', '2026-11-22'), true);
+	assert.equal(birthdayFromParts('22', '11'), '11-22');
+	assert.equal(birthdayFromParts('30', '2'), '', 'il 30 febbraio non esiste');
+	assert.equal(birthdayFromParts('', '2'), '');
+	assert.equal(birthdayMonthDay('1990-02-29'), '02-29');
+	assert.deepEqual(profileValues({ name: 'Dario', birthdayDay: '4', birthdayMonth: '5' }), { name: 'Dario', birthday: '05-04' });
+	assert.deepEqual(profileValues({ name: 'Dario', birthdayDay: '', birthdayMonth: '' }), { name: 'Dario', birthday: '' });
 	assert.deepEqual(STEPS, ['welcome', 'who', 'chat', 'cards', 'confirm', 'key', 'backup', 'import', 'end']);
 });
 
@@ -114,7 +122,15 @@ test('opens the rating form for a season without proposing place and company', (
 test('shows profile, detail mode, key actions, info page and credit in Settings', () => {
 	const views = makeViews(buildAppData(state));
 	const waiting = views.renderSettings();
-	assert.match(waiting, /<p>Ciao, Dario<\/p>/);
+	assert.match(waiting, /<p>Ciao, Dario!<\/p>/);
+	assert.match(waiting, /data-notify="notifyBirthday">/, 'con il compleanno l’interruttore degli auguri si usa');
+	assert.match(waiting, /<option value="11" selected>novembre<\/option>/);
+	assert.match(waiting, /<option value="22" selected>22<\/option>/);
+	// Senza nome si saluta e basta; senza compleanno gli auguri sono spenti e l'interruttore non si usa.
+	const anonymous = makeViews(buildAppData({ ...state, profile: {} })).renderSettings();
+	assert.match(anonymous, /<p>Ciao!<\/p>/);
+	assert.doesNotMatch(anonymous, /Senza nome/);
+	assert.match(anonymous, /aria-checked="false" aria-labelledby="notify-birthday-label" data-notify="notifyBirthday" disabled>/);
 	assert.match(waiting, /Purista della lingua originale · Commento tutto · 🍿/);
 	assert.match(waiting, /Film del cuore: The Thing \(1982\)/);
 	assert.match(waiting, /Completa, in attesa della chiave/);

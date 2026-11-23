@@ -1,19 +1,47 @@
 // Serata in programma (PIANO.md, §6): salvataggio, titoli aggiunti o tolti, serata conclusa ("Com'è andata?") e
 // cancellazione. Tutto sul telefono con store.js; dopo ogni modifica si rileggono i dati (loadData) e si ridisegna.
 import { meetingMovies, today } from './domain.js';
+import { hydrateIcons } from './icons.js';
 import { showErrorToast, showToast } from './toasts.js';
 
-// onPlannedSaved: dopo il salvataggio di una serata (per chiedere il permesso delle notifiche, notifications.js).
-export function createMeeting({ store, getData, render, loadData, askConfirmation, runUndoable, flushUndoable, clearSelectedMovie, onPlannedSaved = () => {} }) {
+// renderMeetingForm: il modulo della finestra (views.js). onPlannedSaved: dopo il salvataggio di una serata (per chiedere il permesso delle notifiche, notifications.js).
+export function createMeeting({ store, getData, render, loadData, askConfirmation, runUndoable, flushUndoable, clearSelectedMovie, renderMeetingForm, onPlannedSaved = () => {} }) {
 	const scheduledMovieIds = () => new Set(meetingMovies(getData().upcoming).map(movie => movie.id));
 	const selectableMovies = () => {
 		const scheduled = scheduledMovieIds();
 		return getData().movies.filter(movie => !scheduled.has(movie.id));
 	};
 
+	// Finestra della serata (matita in Home): data, luogo e titoli, salvati insieme.
+	const dialog = document.getElementById('meeting-dialog');
+	const dialogBody = document.getElementById('meeting-dialog-body');
+	function openEditor() {
+		dialogBody.innerHTML = renderMeetingForm();
+		hydrateIcons(dialogBody);
+		if (!dialog.open) dialog.showModal();
+	}
+	dialog.addEventListener('submit', event => {
+		if (event.target.id === 'calendar-form') saveMeeting(event);
+	});
+	dialog.addEventListener('click', event => {
+		const remove = event.target.closest('[data-meeting-remove]');
+		if (remove) {
+			const list = remove.closest('.calendar-film-list');
+			remove.closest('[data-meeting-movie]').remove();
+			if (list && !list.children.length) list.innerHTML = '<p class="help-text">Nessun titolo in programma.</p>';
+			return;
+		}
+		if (event.target.closest('[data-meeting-cancel]')) dialog.close();
+		else if (event.target.closest('[data-meeting-clear]')) clearMeeting();
+	});
+	document.getElementById('meeting-dialog-close').addEventListener('click', () => dialog.close());
+	dialog.addEventListener('close', () => {
+		dialogBody.innerHTML = '';
+	});
+
 	async function saveMeeting(event) {
 		event.preventDefault();
-		const form = new FormData(event.currentTarget);
+		const form = new FormData(event.target);
 		// Una rimozione ancora annullabile va salvata prima: partendo dopo, riscriverebbe la lista con i valori vecchi.
 		await flushUndoable();
 		// Data e luogo sono facoltativi: un campo vuoto viene salvato come "da definire".
@@ -24,6 +52,7 @@ export function createMeeting({ store, getData, render, loadData, askConfirmatio
 		};
 		try {
 			await store.savePlanned(next);
+			dialog.close();
 			await loadData();
 			render();
 			showToast('meetingSaved', { past: next.date !== null && next.date < today() });
@@ -31,28 +60,6 @@ export function createMeeting({ store, getData, render, loadData, askConfirmatio
 		} catch (error) {
 			showErrorToast(error);
 		}
-	}
-
-	function removeScheduledMovie(movieId) {
-		if (!getData().upcoming) return;
-		const meeting = getData().upcoming;
-		const index = meetingMovies(meeting).findIndex(movie => movie.id === movieId);
-		if (index < 0) return;
-		// Data e luogo del modulo, anche se non ancora salvati: la rimozione li salva insieme alla lista.
-		const form = document.getElementById('calendar-form');
-		const formData = form ? new FormData(form) : null;
-		const date = formData ? String(formData.get('date') || '') || null : meeting.date || null;
-		const place = formData ? String(formData.get('place') || '').trim() || null : meeting.place || null;
-		const removed = meeting.movies[index];
-		runUndoable({
-			toastKey: 'movieUnscheduled',
-			apply: () => meeting.movies.splice(index, 1),
-			revert: () => meeting.movies.splice(Math.min(index, meeting.movies.length), 0, removed),
-			commit: () => store.savePlanned({ date, place, movieIds: meeting.movies.map(movie => movie.id) }).then(() => {
-				meeting.date = date;
-				meeting.place = place;
-			})
-		});
 	}
 
 	// La serata è andata: i titoli entrano nel diario (con data e luogo della serata) ed escono dalla watchlist.
@@ -75,6 +82,7 @@ export function createMeeting({ store, getData, render, loadData, askConfirmatio
 		try {
 			await flushUndoable();
 			await store.clearPlanned();
+			if (dialog.open) dialog.close();
 			await loadData();
 			render();
 			showToast('meetingCleared');
@@ -105,13 +113,11 @@ export function createMeeting({ store, getData, render, loadData, askConfirmatio
 	}
 
 	function bind() {
-		document.getElementById('calendar-form')?.addEventListener('submit', saveMeeting);
+		// In Home: "Non l'abbiamo fatta" della serata passata, "Segna come vista" e la matita (o l'invito a organizzarla).
 		document.getElementById('clear-meeting')?.addEventListener('click', clearMeeting);
-		// Nella Serata il pulsante si chiama ancora archive-meeting come sul sito; in Home complete-meeting.
-		document.getElementById('archive-meeting')?.addEventListener('click', completeMeeting);
 		document.getElementById('complete-meeting')?.addEventListener('click', completeMeeting);
-		document.querySelectorAll('.remove-scheduled-movie').forEach(button => button.addEventListener('click', () => removeScheduledMovie(button.dataset.movieId)));
+		document.querySelectorAll('[data-edit-meeting]').forEach(button => button.addEventListener('click', openEditor));
 	}
 
-	return { selectableMovies, scheduleMovie, bind };
+	return { selectableMovies, scheduleMovie, bind, openEditor };
 }

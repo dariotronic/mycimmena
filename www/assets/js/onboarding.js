@@ -6,8 +6,8 @@ import { hydrateIcons, icon } from './icons.js';
 import { showErrorToast } from './toasts.js';
 import { bindKeySetup, renderKeySetup } from './key-setup.js';
 import { bindMoviePicker } from './movie-picker.js';
-import { COMPANY, LANGUAGES, PLACES, POPCORN, SPECTATORS } from './profile.js';
-import { importHowTo } from './import-ui.js';
+import { birthdayFields, COMPANY, LANGUAGES, PLACES, POPCORN, profileValues, SPECTATORS } from './profile.js';
+import { FILE_ACCEPT, importHowTo } from './import-ui.js';
 
 export const STEPS = ['welcome', 'who', 'chat', 'cards', 'confirm', 'key', 'backup', 'import', 'end'];
 
@@ -40,7 +40,8 @@ const PLANS = {
 	}
 };
 
-// openBackup: ripristino di un backup dal benvenuto (telefono nuovo); openImport: importazione della watchlist.
+// openBackup: ripristino di un backup (telefono nuovo), con `onResult` per l'esito; openImport: importazione della
+// watchlist, con il file già scelto.
 // onProfileSaved: dopo "Chi sei?" con il compleanno, per chiedere il permesso delle notifiche.
 export function createOnboarding({ store, details, getData, refresh, onFinish, openBackup = () => {}, openImport = () => {}, onProfileSaved = () => {} }) {
 	const root = document.getElementById('onboarding');
@@ -52,13 +53,15 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 	const isActive = () => !state().done;
 	const choice = () => state().choice || (getData().settings?.detailMode === 'full' ? 'full' : null);
 
-	// Passaggi da saltare: la chiave serve solo a chi ha scelto la versione completa (e non ne ha già una valida).
+	// Passaggi da saltare: la chiave serve solo a chi ha scelto la versione completa e non ne ha già una valida
+	// (per esempio da un backup). Una volta mostrato, il passaggio resta anche dopo la verifica: senza, "Avanti" e
+	// "Indietro" non lo troverebbero più nella lista (e si tornava al benvenuto).
 	function stepsFor(plan) {
-		return STEPS.filter(id => id !== 'key' || (plan === 'full' && getData().mode !== 'full'));
+		return STEPS.filter(id => id !== 'key' || (plan === 'full' && (getData().mode !== 'full' || state().keyShown)));
 	}
 
 	async function goTo(id, patch = {}) {
-		await store.updateKv('onboarding', { ...patch, step: id });
+		await store.updateKv('onboarding', { ...patch, ...(id === 'key' ? { keyShown: true } : {}), step: id });
 		await refresh();
 		render();
 		root.scrollTo?.({ top: 0, behavior: 'instant' });
@@ -83,31 +86,66 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 		</div>
 	`;
 
-	const frame = (content, { showBack = true, nextLabel = 'Avanti', nextAttrs = 'data-ob-next', extra = '' } = {}) => `
+	// Pulsanti in fondo allo schermo, a tutta larghezza e uno sotto l'altro: prima l'azione principale (`main`, HTML
+	// già pronto, oppure il pulsante `nextLabel`), poi le altre (`extra`), per ultimo "Indietro".
+	const frame = (content, { showBack = true, nextLabel = 'Avanti', nextAttrs = 'data-ob-next', main = '', extra = '' } = {}) => `
 		<div class="onboarding-step" data-step="${step()}">
 			<div class="onboarding-progress" aria-hidden="true">${stepsFor(choice()).map(id => `<span${id === step() ? ' class="active"' : ''}></span>`).join('')}</div>
-			${content}
+			<div class="onboarding-content">
+				${content}
+				${restoreNotice()}
+			</div>
 			<div class="onboarding-actions">
-				${showBack ? '<button class="button secondary" type="button" data-ob-back>Indietro</button>' : ''}
+				${main || (nextLabel ? `<button class="button" type="button" ${nextAttrs}>${nextLabel}</button>` : '')}
 				${extra}
-				${nextLabel ? `<button class="button" type="button" ${nextAttrs}>${nextLabel}</button>` : ''}
+				${showBack ? '<button class="button secondary" type="button" data-ob-back>Indietro</button>' : ''}
 			</div>
 		</div>
 	`;
 
+	// Esito del ripristino di un backup fatto durante l'onboarding: riuscito (si può entrare subito) o no.
+	function restoreNotice() {
+		const result = state().restore;
+		if (!result) return '';
+		if (!result.ok) {
+			return `
+				<div class="onboarding-notice error" role="alert">
+					<p><strong>Ripristino non riuscito.</strong> ${escapeHtml(result.message || '')}</p>
+					<p>Puoi riprovare con un altro file, oppure andare avanti senza backup.</p>
+				</div>
+			`;
+		}
+		return `
+			<div class="onboarding-notice" role="status">
+				<p><strong>Backup ripristinato ✓</strong></p>
+				${result.text ? `<p>${escapeHtml(result.text)}</p>` : ''}
+				<p>Profilo e impostazioni sono quelli del backup: puoi entrare subito, oppure continuare e rivedere le scelte.</p>
+				<div class="onboarding-notice-actions">
+					<button class="button" type="button" data-ob-finish>Entra nell’app</button>
+					<button class="button secondary" type="button" data-ob-dismiss>Continua la configurazione</button>
+				</div>
+			</div>
+		`;
+	}
+
+	// Interruttore Light / Completa e, sotto, la scheda di esempio della versione scelta, a tutta larghezza.
+	const planSwitch = plan => `
+		<div class="onboarding-plan-switch" role="radiogroup" aria-label="Versione delle schede">
+			${['light', 'full'].map(id => `<button class="onboarding-plan-option${plan === id ? ' active' : ''}" type="button" role="radio" aria-checked="${plan === id}" data-ob-plan="${id}">${PLANS[id].title}</button>`).join('')}
+		</div>
+	`;
 	const sampleCard = plan => `
-		<article class="onboarding-sample${choice() === plan ? ' selected' : ''}">
-			<button class="onboarding-sample-pick" type="button" data-ob-plan="${plan}" aria-pressed="${choice() === plan}">
-				<span class="onboarding-sample-name">${PLANS[plan].title}</span>
-				<img class="onboarding-sample-poster" src="${SAMPLE.poster}" alt="" loading="lazy">
+		<article class="onboarding-sample">
+			<img class="onboarding-sample-poster" src="${SAMPLE.poster}" alt="" loading="lazy">
+			<div class="onboarding-sample-body">
 				<span class="onboarding-sample-title">${SAMPLE.title} (${SAMPLE.year})</span>
 				<dl>
 					<div><dt>Tipo</dt><dd>Film</dd></div>
 					<div><dt>Attori</dt><dd>${escapeHtml(SAMPLE.stars)}</dd></div>
 					${plan === 'full' ? SAMPLE.full.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('') : ''}
 				</dl>
-				<span class="onboarding-sample-note">${plan === 'light' ? 'Funziona subito, non serve nient’altro.' : 'Serve una chiave gratuita di OMDb: ti registri solo con la mail, in 2–3 minuti.'}</span>
-			</button>
+			</div>
+			<p class="onboarding-sample-note">${plan === 'light' ? 'Funziona subito, non serve nient’altro.' : 'Serve una chiave gratuita di OMDb: ti registri solo con la mail, in 2–3 minuti.'}</p>
 		</article>
 	`;
 
@@ -116,12 +154,12 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 			<img class="onboarding-logo" src="assets/logo.svg" alt="" width="120" height="120">
 			<h1 tabindex="-1">Benvenuto in myCimmena</h1>
 			<p class="onboarding-lead">Tieni traccia dei film e delle serie che vuoi vedere e di quelli che hai visto, con i tuoi voti. Tutto resta sul tuo telefono.</p>
-		`, { showBack: false, nextLabel: 'Iniziamo', extra: '<button class="text-button" type="button" data-ob-restore>Ho un backup: ripristinalo</button>' }),
+		`, { showBack: false, nextLabel: 'Iniziamo', extra: '<button class="button secondary" type="button" data-ob-restore>Ho un backup: ripristinalo</button>' }),
 		who: () => frame(`
 			<h1 tabindex="-1">Chi sei?</h1>
 			<form class="form-grid onboarding-form" data-ob-form>
 				<div class="field full"><label for="ob-name">Come ti chiami?</label><input id="ob-name" name="name" type="text" maxlength="60" autocomplete="given-name" value="${escapeHtml(profile().name || '')}" placeholder="Il nome con cui ti saluto"></div>
-				<div class="field full"><label for="ob-birthday">Quando compi gli anni? <span>(facoltativo, per farti gli auguri)</span></label><input id="ob-birthday" name="birthday" type="date" value="${escapeHtml(profile().birthday || '')}"></div>
+				<div class="field full"><label for="ob-birthday-day">Quando compi gli anni? <span>(facoltativo, per farti gli auguri)</span></label>${birthdayFields('ob-birthday', profile().birthday)}</div>
 			</form>
 		`),
 		chat: () => frame(`
@@ -143,12 +181,13 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 				<fieldset><legend>Che spettatore sei?</legend>${chips('spectator', SPECTATORS, profile().spectator)}</fieldset>
 				<div class="field full"><label for="ob-director">Il regista che non sbaglia mai</label><input id="ob-director" name="director" type="text" maxlength="80" value="${escapeHtml(profile().director || '')}"></div>
 			</form>
-		`, { extra: '<button class="text-button" type="button" data-ob-skip>Salta</button>' }),
+		`, { extra: '<button class="button secondary" type="button" data-ob-skip>Salta</button>' }),
 		cards: () => frame(`
 			<h1 tabindex="-1">Quanto dettagliate vuoi le schede?</h1>
-			<p class="onboarding-lead">Lo stesso film nelle due versioni. Tocca quella che preferisci: si cambia quando vuoi dalle Impostazioni.</p>
-			<div class="onboarding-samples">${sampleCard('light')}${sampleCard('full')}</div>
-		`, { nextLabel: choice() ? 'Avanti' : '', nextAttrs: 'data-ob-next' }),
+			<p class="onboarding-lead">Lo stesso film nelle due versioni: scegli quella che preferisci. Si cambia quando vuoi dalle Impostazioni.</p>
+			${planSwitch(choice() || 'light')}
+			${sampleCard(choice() || 'light')}
+		`, { nextAttrs: 'data-ob-cards-next' }),
 		confirm: () => {
 			const plan = PLANS[choice() || 'light'];
 			const other = PLANS[choice() === 'full' ? 'light' : 'full'];
@@ -163,13 +202,15 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 						</section>
 					`).join('')}
 				</div>
-			`, { nextLabel: `Confermo ${plan.title}`, nextAttrs: 'data-ob-confirm', extra: '<button class="text-button" type="button" data-ob-back>Torna al confronto</button>', showBack: false });
+			`, { nextLabel: `Confermo ${plan.title}`, nextAttrs: 'data-ob-confirm', extra: '<button class="button secondary" type="button" data-ob-back>Torna al confronto</button>', showBack: false });
 		},
 		key: () => frame(`
 			<h1 tabindex="-1">La chiave di OMDb</h1>
 			<p class="onboarding-lead">È gratuita e personale: con questa l'app scarica i dettagli dei titoli direttamente da OMDb, senza passare da altri server.</p>
-			${renderKeySetup()}
-		`, { nextLabel: '' }),
+			${renderKeySetup({ later: false, verified: getData().mode === 'full' })}
+		`, getData().mode === 'full'
+			? {}
+			: { nextLabel: '', extra: '<button class="button secondary" type="button" data-ob-key-later>La inserisco più tardi</button>' }),
 		backup: () => frame(`
 			<h1 tabindex="-1">I tuoi dati stanno qui</h1>
 			<p class="onboarding-lead">Watchlist, diario e voti vivono solo su questo telefono: niente account, niente server.</p>
@@ -179,8 +220,16 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 			<h1 tabindex="-1">Hai già una watchlist altrove?</h1>
 			<p class="onboarding-lead">Puoi portare in myCimmena i film da vedere salvati su Letterboxd o IMDb. Ecco come scaricare il file:</p>
 			${importHowTo()}
-			<p class="help-text">Lo trovi sempre in Impostazioni → Importa watchlist.</p>
-		`, { nextLabel: 'Ho il file, importa', nextAttrs: 'data-ob-import', extra: '<button class="text-button" type="button" data-ob-next>Più tardi</button>' }),
+			<section class="onboarding-import-backup">
+				<h2>Da un altro telefono con myCimmena</h2>
+				<p>Hai esportato un backup sul telefono vecchio? Ripristinalo: tornano watchlist, diario, voti e impostazioni.</p>
+				<button class="button secondary" type="button" data-ob-restore>Ripristina un backup di myCimmena</button>
+			</section>
+			<p class="help-text">Non hai il file adesso? Nessun problema: puoi importare quando vuoi da Impostazioni → Importa da Letterboxd o IMDb.</p>
+		`, {
+			main: `<label class="button file-button">Scegli il file (.zip o .csv)<input type="file" accept="${FILE_ACCEPT}" data-ob-import-file></label>`,
+			extra: '<button class="button secondary" type="button" data-ob-next>Salta</button>'
+		}),
 		end: () => frame(`
 			<img class="onboarding-logo" src="assets/logo.svg" alt="" width="120" height="120">
 			<h1 tabindex="-1">Ciao${profile().name ? `, ${escapeHtml(profile().name)}` : ''}!</h1>
@@ -197,7 +246,7 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 			if (!element.name || (element.type === 'radio' && !element.checked)) continue;
 			values[element.name] = element.value.trim();
 		}
-		return values;
+		return profileValues(values);
 	}
 
 	function render() {
@@ -221,12 +270,12 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 			});
 		}
 		if (step() === 'key') {
+			// Chiave valida: si resta qui con l'esito e il pulsante "Avanti"; si prosegue quando lo decide l'utente.
 			unbindKey = bindKeySetup(root, {
 				useKey: details.useKey,
-				onDone: () => next(),
-				onLater: async () => {
-					await store.updateKv('settings', { detailMode: 'full', omdbKeyStatus: getData().settings?.omdbKeyStatus || 'missing' });
-					await next();
+				onDone: async () => {
+					await refresh();
+					render();
 				}
 			});
 		}
@@ -237,9 +286,14 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 			if (event.target.closest('[data-ob-back]')) return void await back();
 			const plan = event.target.closest('[data-ob-plan]');
 			if (plan) return void await goTo('cards', { choice: plan.dataset.obPlan });
+			if (event.target.closest('[data-ob-cards-next]')) return void await goTo('confirm', { choice: choice() || 'light' });
 			if (event.target.closest('[data-ob-skip]')) return void await next();
-			if (event.target.closest('[data-ob-restore]')) return void openBackup();
-			if (event.target.closest('[data-ob-import]')) return void openImport({ afterImport: () => next() });
+			if (event.target.closest('[data-ob-restore]')) return void openBackup({ onResult: saveRestoreResult });
+			if (event.target.closest('[data-ob-dismiss]')) return void await goTo(step(), { restore: null });
+			if (event.target.closest('[data-ob-key-later]')) {
+				await store.updateKv('settings', { detailMode: 'full', omdbKeyStatus: getData().settings?.omdbKeyStatus || 'missing' });
+				return void await next();
+			}
 			if (event.target.closest('[data-ob-confirm]')) {
 				const full = choice() === 'full';
 				const settings = getData().settings || {};
@@ -249,7 +303,7 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 				return void await next();
 			}
 			if (event.target.closest('[data-ob-finish]')) {
-				await store.updateKv('onboarding', { done: true, finishedAt: new Date().toISOString() });
+				await store.updateKv('onboarding', { done: true, restore: null, finishedAt: new Date().toISOString() });
 				await refresh();
 				render();
 				onFinish();
@@ -265,6 +319,21 @@ export function createOnboarding({ store, details, getData, refresh, onFinish, o
 			showErrorToast(error);
 		}
 	});
+
+	// Il file della watchlist scelto direttamente dal pulsante: la finestra dell'importazione parte già con quello.
+	root.addEventListener('change', event => {
+		const input = event.target.closest('[data-ob-import-file]');
+		const file = input?.files?.[0];
+		if (!file) return;
+		input.value = '';
+		openImport({ file, afterImport: () => next() });
+	});
+
+	// Esito del ripristino (backup-ui.js), salvato prima che l'app si ridisegni. Il backup può contenere un onboarding
+	// già finito: qui resta aperto, con l'avviso, finché l'utente non sceglie se entrare subito o continuare.
+	async function saveRestoreResult(result) {
+		await store.updateKv('onboarding', { done: false, step: step(), restore: result });
+	}
 
 	// Tasto Indietro di Android durante l'onboarding: passaggio precedente (dal primo non si fa niente).
 	function handleBack() {

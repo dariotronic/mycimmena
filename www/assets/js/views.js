@@ -7,7 +7,7 @@ import { viewingsOf } from './app-data.js';
 import { DEFAULT_DRAW_FILTERS, drawChances, formatChance } from './draw.js';
 import { soundEnabled } from './slot-sounds.js';
 import { APP_VERSION, CREDIT_HANDLE, CREDIT_URL, REPO_URL } from './app-info.js';
-import { COMPANY, diaryDefaults, flavourLine, isBirthday, LANGUAGES, PLACES, POPCORN, SPECTATORS } from './profile.js';
+import { birthdayFields, birthdayMonthDay, COMPANY, diaryDefaults, flavourLine, isBirthday, LANGUAGES, PLACES, POPCORN, SPECTATORS } from './profile.js';
 import { renderWatchingRow } from './series-ui.js';
 import { IMPORT_SOURCES } from './watchlist-import.js';
 
@@ -71,7 +71,10 @@ export function createViews(context) {
 					${pageHeader('Home', 'La prossima serata.')}
 					${renderBirthday(data)}
 					${renderWatching()}
-					${emptyState('Non c’è ancora una serata in programma.', 'Organizza la prossima serata', '#calendario')}
+					<div class="empty-state">
+						<p>Non c’è ancora una serata in programma.</p>
+						<button class="button secondary" type="button" data-edit-meeting>Organizza la prossima serata</button>
+					</div>
 					${renderHomeSummary(data)}
 				</section>
 			`;
@@ -106,6 +109,9 @@ export function createViews(context) {
 					<p class="eyebrow">La prossima serata</p>
 					<button id="share-home" class="icon-button" type="button" aria-label="Condividi la prossima serata" title="Condividi">
 						${icon('share')}
+					</button>
+					<button class="icon-button" type="button" data-edit-meeting aria-label="Modifica la prossima serata" title="Modifica">
+						${icon('edit')}
 					</button>
 					${meeting.date ? `
 						<button id="calendar-home" class="icon-button" type="button" aria-label="Aggiungi la prossima serata al calendario" title="Aggiungi al calendario">
@@ -215,76 +221,47 @@ export function createViews(context) {
 		`;
 	}
 
-	function renderCalendar() {
+	// Modulo della prossima serata, nella finestra che si apre dalla matita in Home: data, luogo e i titoli in programma.
+	// La croce toglie il titolo dal modulo (meeting.js); si salva tutto insieme con "Salva".
+	function renderMeetingForm() {
 		const data = getData();
 		const meeting = data.upcoming || {};
 		const scheduledMovies = meetingMovies(meeting);
 		const scheduledRows = scheduledMovies.map(movie => `
-			<article class="calendar-film-row">
+			<article class="calendar-film-row" data-meeting-movie>
 				<input type="hidden" name="movieIds" value="${escapeHtml(movie.id)}">
-				${moviePosterButton(movie, 'calendar-film-poster')}
+				${poster(movie, 'calendar-film-poster')}
 				<div class="calendar-film-copy">
 					<h3>${escapeHtml(movie.title)}</h3>
-					${movieDetails(movie)}
 					<p>${escapeHtml(movie.year || 'Anno non indicato')}</p>
 				</div>
-				<div class="calendar-film-actions">
-					${infoButton(movie)}
-					<button class="button secondary icon-only remove-scheduled-movie" data-movie-id="${escapeHtml(movie.id)}" type="button" aria-label="Rimuovi ${escapeHtml(movie.title)} dalla serata" title="Rimuovi">
-						${icon('close')}
-					</button>
-				</div>
+				<button class="icon-button small" type="button" data-meeting-remove aria-label="Togli ${escapeHtml(movie.title)} dalla serata" title="Togli dalla serata">
+					${icon('close')}
+				</button>
 			</article>
 		`).join('');
-		const removeButton = data.upcoming
-			? `
-				<button id="clear-meeting" class="button secondary icon-only" type="button" aria-label="Rimuovi la serata" title="Rimuovi la serata">
-					${icon('event_busy')}
-				</button>
-			`
-			: '';
-		const archiveButton = data.upcoming
-			? `
-				<button id="archive-meeting" class="button secondary icon-only" type="button" aria-label="Segna la serata come vista" title="Segna la serata come vista">
-					${icon('task_alt')}
-				</button>
-			`
-			: '';
 		return `
-			<section class="calendar-page">
-				${pageHeader('Serata', 'Quando, dove e cosa si guarda.')}
-				<form id="calendar-form" class="form-grid calendar-form">
-					<div class="field">
-						<label for="meeting-date">Data</label>
-						<input id="meeting-date" name="date" type="date" value="${escapeHtml(meeting.date || '')}">
-					</div>
-					<div class="field">
-						<label for="meeting-place">Luogo</label>
-						<input id="meeting-place" name="place" type="text" maxlength="120" value="${escapeHtml(meeting.place || '')}" placeholder="Dove si guarda?">
-					</div>
+			<form id="calendar-form" class="form-grid calendar-form">
+				<div class="field">
+					<label for="meeting-date">Data</label>
+					<input id="meeting-date" name="date" type="date" value="${escapeHtml(meeting.date || '')}">
+				</div>
+				<div class="field">
+					<label for="meeting-place">Luogo</label>
+					<input id="meeting-place" name="place" type="text" maxlength="120" value="${escapeHtml(meeting.place || '')}" placeholder="Dove si guarda?">
+				</div>
+				${scheduledMovies.length ? `
 					<section class="field full movie-picks" aria-labelledby="scheduled-films-title">
-						<h2 id="scheduled-films-title">
-							Film in programma
-							<span class="selected-movie-count">${scheduledMovies.length}</span>
-						</h2>
-						<div class="calendar-film-list">
-							${scheduledRows || '<p class="help-text">Nessun film in programma. Aggiungili dalla watchlist.</p>'}
-						</div>
+						<h3 id="scheduled-films-title" class="field-label">Titoli in programma</h3>
+						<div class="calendar-film-list">${scheduledRows}</div>
 					</section>
-					<div class="field full calendar-actions">
-						<div class="button-row">
-							<button class="button icon-only" type="submit" aria-label="Salva la serata" title="Salva la serata">
-								${icon('save')}
-							</button>
-							<a class="button secondary icon-only" href="#lista" aria-label="Aggiungi un film" title="Aggiungi un film">
-								${icon('add')}
-							</a>
-							${archiveButton}
-							${removeButton}
-						</div>
-					</div>
-				</form>
-			</section>
+				` : '<p class="field full help-text">Nessun titolo in programma: aggiungili dalla scheda di un titolo della watchlist.</p>'}
+				<div class="button-row field full review-form-actions">
+					<button class="button" type="submit">Salva</button>
+					<button class="button secondary" type="button" data-meeting-cancel>Annulla</button>
+					${data.upcoming ? '<button class="text-button" type="button" data-meeting-clear>Cancella la serata</button>' : ''}
+				</div>
+			</form>
 		`;
 	}
 
@@ -333,7 +310,7 @@ export function createViews(context) {
 	function diaryRow(viewing) {
 		const movie = viewing.movie;
 		const meta = viewingMeta(viewing);
-		const notes = sanitizeNotes(viewing.notes).html;
+		const notes = sanitizeNotes(viewing.notes).text.replace(/s+/g, ' ').trim();
 		return `
 			<article class="archive-film-row diary-row">
 				${moviePosterButton(movie, 'archive-film-poster')}
@@ -341,7 +318,7 @@ export function createViews(context) {
 					<h3 class="archive-film-title">${escapeHtml(movieName(movie))}${viewing.label ? ` <span class="diary-label">· ${escapeHtml(viewing.label)}</span>` : ''}</h3>
 					${meta ? `<p class="diary-meta">${escapeHtml(meta)}</p>` : ''}
 					<div class="review-summary">${ratingSummary(viewing.rating)}</div>
-					${notes ? `<div class="review-content diary-notes">${notes}</div>` : ''}
+					${notes ? `<p class="review-content diary-notes">${escapeHtml(notes)}</p>` : ''}
 				</div>
 				<div class="archive-film-actions">
 					${infoButton(movie)}
@@ -807,9 +784,6 @@ export function createViews(context) {
 						<button class="button secondary icon-only remove-movie" data-movie-id="${escapeHtml(movie.id)}" type="button" aria-label="Rimuovi ${escapeHtml(movie.title)} dalla watchlist" title="Rimuovi">
 							${icon('delete')}
 						</button>
-						<button class="button icon-only schedule-movie" data-movie-id="${escapeHtml(movie.id)}" type="button" ${scheduled.has(movie.id) ? 'disabled' : ''} aria-label="Aggiungi ${escapeHtml(movie.title)} alla serata" title="Aggiungi alla serata">
-							${icon('movie')}
-						</button>
 				</div>
 			</article>
 		`).join('');
@@ -845,13 +819,14 @@ export function createViews(context) {
 		const flavour = flavourLine(profile);
 		const lastBackup = data.meta?.lastBackupAt || '';
 		const reminderOn = data.settings?.backupReminder !== false;
+		const hasBirthday = Boolean(birthdayMonthDay(profile.birthday));
 		return `
-			${pageHeader('Impostazioni', profile.name ? `Ciao, ${profile.name}` : '')}
+			${pageHeader('Impostazioni', profile.name ? `Ciao, ${profile.name}!` : 'Ciao!')}
 			<section class="settings-panel">
 				<div class="settings-profile">
 					${data.favorite ? `<button class="movie-poster-trigger settings-favorite" data-movie-id="${escapeHtml(data.favorite.id)}" type="button" aria-label="Il tuo film del cuore: ${escapeHtml(data.favorite.title)}">${poster(data.favorite, 'archive-film-poster')}</button>` : ''}
 					<div>
-						<p class="settings-name">${escapeHtml(profile.name || 'Senza nome')}</p>
+						${profile.name ? `<p class="settings-name">${escapeHtml(profile.name)}</p>` : ''}
 						${flavour ? `<p class="help-text">${escapeHtml(flavour)}</p>` : ''}
 						${data.favorite ? `<p class="help-text">Film del cuore: ${escapeHtml(movieName(data.favorite))}</p>` : ''}
 					</div>
@@ -860,7 +835,7 @@ export function createViews(context) {
 					<summary>Modifica il profilo</summary>
 					<form id="profile-form" class="form-grid profile-settings-form">
 						<div class="field"><label for="profile-name">Nome</label><input id="profile-name" name="name" type="text" maxlength="60" value="${escapeHtml(profile.name || '')}" autocomplete="given-name"></div>
-						<div class="field"><label for="profile-birthday">Compleanno</label><input id="profile-birthday" name="birthday" type="date" value="${escapeHtml(profile.birthday || '')}"></div>
+						<div class="field"><label for="profile-birthday-day">Compleanno</label>${birthdayFields('profile-birthday', profile.birthday)}</div>
 						<div class="field full">
 							<span class="field-label">Film del cuore</span>
 							<div class="movie-picker" data-movie-picker>
@@ -924,8 +899,8 @@ export function createViews(context) {
 					<div>
 						<p class="field-label">Notifiche</p>
 						<div class="setting-switch-row">
-							<span id="notify-birthday-label">Auguri alle 9 del giorno del compleanno${profile.birthday ? '' : ' (aggiungi la data nel profilo)'}</span>
-							<button class="setting-switch" type="button" role="switch" aria-checked="${data.settings?.notifyBirthday !== false}" aria-labelledby="notify-birthday-label" data-notify="notifyBirthday"><span class="setting-switch-thumb" aria-hidden="true"></span></button>
+							<span id="notify-birthday-label">Auguri alle 9 del giorno del compleanno${hasBirthday ? '' : ' (aggiungi la data in «Modifica il profilo»)'}</span>
+							<button class="setting-switch" type="button" role="switch" aria-checked="${hasBirthday && data.settings?.notifyBirthday !== false}" aria-labelledby="notify-birthday-label" data-notify="notifyBirthday"${hasBirthday ? '' : ' disabled'}><span class="setting-switch-thumb" aria-hidden="true"></span></button>
 						</div>
 						<div class="setting-switch-row">
 							<span id="notify-evening-label">Promemoria alle 9 del giorno della serata in programma</span>
@@ -987,5 +962,5 @@ export function createViews(context) {
 		`;
 	}
 
-	return { minVotesLabel, renderInfo, renderWatching, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderCalendar, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
+	return { minVotesLabel, renderInfo, renderWatching, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderMeetingForm, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
 }

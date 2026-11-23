@@ -54,7 +54,7 @@ export const importHowTo = () => `
 	</div>
 `;
 
-const FILE_ACCEPT = '.csv,.zip,text/csv,text/comma-separated-values,application/zip,application/x-zip-compressed,application/octet-stream';
+export const FILE_ACCEPT ='.csv,.zip,text/csv,text/comma-separated-values,application/zip,application/x-zip-compressed,application/octet-stream';
 
 const candidateButton = (item, candidate) => `
 	<button class="import-candidate" type="button" data-import-pick="${escapeHtml(item.key)}" data-movie-id="${escapeHtml(candidate.id)}">
@@ -159,14 +159,16 @@ export function createImportUi({ store, getData, refresh, askConfirmation, onImp
 	}
 
 	// afterImport: per l'onboarding, che passa al passaggio successivo quando l'importazione è finita.
-	// Un'importazione lasciata a metà si riprende, qualunque sia il suo tipo.
-	async function open({ afterImport = () => {}, kind: wanted = 'watchlist' } = {}) {
+	// Un'importazione lasciata a metà si riprende, qualunque sia il suo tipo. Con `file` (già scelto, dall'onboarding)
+	// si parte subito con quello.
+	async function open({ afterImport = () => {}, kind: wanted = 'watchlist', file = null } = {}) {
 		onDone = afterImport;
 		error = '';
-		if (phase !== 'matching') job = await store.getImportJob();
+		if (phase !== 'matching') job = file ? null : await store.getImportJob();
 		kind = job?.kind || wanted;
 		draw();
 		if (!dialog.open) dialog.showModal();
+		if (file && phase !== 'matching') await chooseFile(file);
 	}
 
 	async function match() {

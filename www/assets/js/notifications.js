@@ -6,6 +6,7 @@
 // all'apertura successiva dell'app si passa all'anno dopo. Il permesso (Android 13+) si chiede solo dopo
 // un'azione dell'utente: compleanno salvato, serata salvata, interruttore acceso.
 import { movieName } from './domain.js';
+import { birthdayMonthDay } from './profile.js';
 
 export const NOTIFICATION_IDS = Object.freeze({ birthday: 1001, evening: 1002 });
 const HOUR = 9;
@@ -18,8 +19,9 @@ const nineOn = date => {
 
 // Prossimo compleanno alle 9 (oggi se non sono ancora le 9). Il 29 febbraio, negli anni non bisestili, è il 28.
 export function nextBirthday(birthday, now = new Date()) {
-	if (!/^\d{4}-\d{2}-\d{2}$/.test(String(birthday || ''))) return null;
-	const [, month, day] = birthday.split('-').map(Number);
+	const monthDay = birthdayMonthDay(birthday);
+	if (!monthDay) return null;
+	const [month, day] = monthDay.split('-').map(Number);
 	for (let year = now.getFullYear(); year <= now.getFullYear() + 1; year += 1) {
 		const lastDay = new Date(year, month, 0).getDate();
 		const at = new Date(year, month - 1, Math.min(day, lastDay), HOUR, 0, 0, 0);

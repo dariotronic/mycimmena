@@ -4,6 +4,7 @@ import { hydrateIcons } from './icons.js';
 import { showErrorToast, showToast } from './toasts.js';
 import { bindKeySetup, renderKeySetup } from './key-setup.js';
 import { bindMoviePicker } from './movie-picker.js';
+import { profileValues } from './profile.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -71,7 +72,7 @@ export function createSettings({ store, details, getData, refresh, onProfileSave
 		if (!form) return;
 		form.addEventListener('submit', async event => {
 			event.preventDefault();
-			const values = Object.fromEntries([...new FormData(form).entries()].map(([name, value]) => [name, String(value).trim()]));
+			const values = profileValues(Object.fromEntries([...new FormData(form).entries()].map(([name, value]) => [name, String(value).trim()])));
 			try {
 				await store.updateKv('profile', values);
 				await refresh();
