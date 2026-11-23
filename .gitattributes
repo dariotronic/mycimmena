@@ -8,3 +8,4 @@
 *.woff2 binary
 *.jks binary
 *.keystore binary
+*.p12 binary

@@ -45,6 +45,17 @@ L'APK esce in `android/app/build/outputs/apk/debug/app-debug.apk`. Per installar
 & "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install -r android\app\build\outputs\apk\debug\app-debug.apk
 ```
 
+### APK di prova senza Android Studio
+
+Il workflow `debug-apk.yml` compila l'APK di debug a ogni push (o a mano, scheda Actions → APK di prova → Run workflow) e lo lascia come artifact per 14 giorni. Sul PC bastano [gh](https://cli.github.com/) (con `gh auth login`) e le platform-tools di Android per `adb`:
+
+```powershell
+gh run download --name mycimmena-dev --dir dist\dev
+& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install -r dist\dev\app-debug.apk
+```
+
+Gli APK di debug si firmano con la chiave fissa `android/app/debug.p12` (password e alias predefiniti di Android), che sta nella repo apposta: quelli compilati su Actions e quelli compilati in locale si installano uno sopra l'altro senza perdere i dati.
+
 La versione di debug si chiama **myCimmena dev** e ha un id diverso (`it.mycimmena.app.debug`): si installa accanto a quella delle Release, con dati separati. Solo la versione di debug si può ispezionare da `chrome://inspect`.
 
 ## Versione

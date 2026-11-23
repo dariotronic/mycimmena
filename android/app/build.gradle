@@ -28,6 +28,12 @@ android {
         }
     }
     signingConfigs {
+        // Chiave di debug fissa (debug.p12), nella repo apposta: così gli APK di prova compilati su Actions o su
+        // un altro PC si installano uno sopra l'altro. Password e alias sono quelli predefiniti di Android per il
+        // debug ("android", AndroidDebugKey). Vale solo per "myCimmena dev" (.debug), mai per le release.
+        debug {
+            storeFile file('debug.p12')
+        }
         release {
             if (signingProps['storeFile']) {
                 storeFile file(signingProps['storeFile'])
