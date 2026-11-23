@@ -41,6 +41,7 @@ export const TOASTS = {
 	// Serie TV
 	episodesMarked: { enabled: true, message: ({ label }) => (label ? `Visto: ${label}` : 'Episodi segnati') },
 	seriesStructureSaved: { enabled: true, message: 'Stagioni salvate' },
+	episodeSaved: { enabled: true, message: ({ label }) => `${label} aggiornato` },
 	seriesRated: { enabled: true, message: 'Voto salvato nel diario' },
 
 	// Backup e importazione

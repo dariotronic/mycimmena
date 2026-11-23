@@ -73,13 +73,13 @@ test('shows the next episode, season progress and episode titles in the series c
 	assert.match(html, /data-series-next data-movie-id="tt11280740"[^>]*>.*Visto S1·E3/s);
 	assert.match(html, /<details class="series-season" data-season="1" open>/);
 	assert.match(html, /<span class="series-season-count">2\/3<\/span>/);
-	assert.match(html, /data-episode="1-1" aria-pressed="true" aria-label="S1·E1 Pilota, visto"/);
+	assert.match(html, /data-episode="1-1" aria-pressed="true" aria-label="S1·E1 Pilota, visto il [^"]+"/);
 	assert.match(html, /data-season="2">\s*<summary><span>Stagione 2<\/span><span class="series-custom-badge">inserita da te<\/span>/);
 	assert.match(html, /data-series-structure>La struttura non è giusta\?/);
 	// Senza struttura: il modulo veloce con stagioni ed episodi per stagione.
 	const empty = renderSeriesSection({ id: 'tt1', has_details: false }, { seasons: null, watched: new Set(), status: null }, { mode: 'light' });
-	assert.match(empty, /data-series-quick/);
-	assert.match(empty, /indica quante stagioni ha la serie/);
+	assert.match(empty, /data-series-structure>Indica stagioni ed episodi/, "senza struttura si apre l’editor stagione per stagione");
+	assert.match(empty, /indica le stagioni della serie/);
 	assert.match(renderSeriesSection({ id: 'tt1', has_details: false }, { seasons: null, watched: new Set() }, { mode: 'full' }), /Caricamento delle stagioni da OMDb/);
 });
 

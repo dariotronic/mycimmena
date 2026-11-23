@@ -1,6 +1,6 @@
 // Serie TV nella scheda del titolo e in "Stai guardando" (PIANO.md, §7): episodi visti, prossimo episodio, stato,
 // stagioni da OMDb o scritte a mano, voti di stagione e serie. La logica pura sta in series.js, i dati in store.js.
-import { escapeHtml, movieName, today } from './domain.js';
+import { escapeHtml, formatDate, movieName, today } from './domain.js';
 import { hydrateIcons, icon } from './icons.js';
 import { showErrorToast, showToast } from './toasts.js';
 import {
@@ -31,14 +31,10 @@ export function renderSeriesSection(movie, info, { mode }) {
 			<h3 class="movie-vote-title">Episodi</h3>
 			${statusChips}
 			${loading ? '<p class="help-text" role="status">Caricamento delle stagioni da OMDb…</p>' : ''}
-			<form class="series-quick-structure" data-series-quick>
-				<p class="help-text">${mode === 'full' ? 'OMDb non conosce le stagioni di questa serie.' : 'Per tenere il segno degli episodi, indica quante stagioni ha la serie.'} Potrai correggere ogni stagione dopo.</p>
-				<div class="form-grid">
-					<div class="field"><label for="series-quick-seasons">Stagioni</label><input id="series-quick-seasons" name="seasons" type="number" min="1" max="${MAX_SEASONS}" inputmode="numeric" required></div>
-					<div class="field"><label for="series-quick-episodes">Episodi per stagione</label><input id="series-quick-episodes" name="episodes" type="number" min="1" max="${MAX_EPISODES}" inputmode="numeric" required></div>
-				</div>
-				<button class="button secondary" type="submit">Salva la struttura</button>
-			</form>
+			<div class="series-quick-structure">
+				<p class="help-text">${mode === 'full' && !loading ? 'OMDb non conosce le stagioni di questa serie.' : 'Per tenere il segno degli episodi, indica le stagioni della serie.'} Per ogni stagione scegli quanti episodi ha.</p>
+				<button class="button secondary" type="button" data-series-structure>Indica stagioni ed episodi</button>
+			</div>
 		`;
 	}
 	const current = next?.s || seasons.list[seasons.list.length - 1].n;
@@ -58,7 +54,9 @@ export function renderSeriesSection(movie, info, { mode }) {
 				const episode = { s: season.n, e: index + 1 };
 				const seenIt = watched.has(episodeKey(episode));
 				const title = episodeTitle(seasons, episode);
-				return `<button class="episode${seenIt ? ' seen' : ''}" type="button" data-episode="${episodeKey(episode)}" aria-pressed="${seenIt}" aria-label="${escapeHtml(`${formatEpisode(episode)}${title ? ` ${title}` : ''}${seenIt ? ', visto' : ''}`)}"${title ? ` title="${escapeHtml(title)}"` : ''}>${index + 1}</button>`;
+				const detail = info.episodes?.get(episodeKey(episode));
+				const label = `${formatEpisode(episode)}${title ? ` ${title}` : ''}${seenIt ? `, visto${detail?.date ? ` il ${formatDate(detail.date)}` : ''}` : ''}${detail?.note ? ', con una nota' : ''}`;
+				return `<button class="episode${seenIt ? ' seen' : ''}${detail?.note ? ' has-note' : ''}" type="button" data-episode="${episodeKey(episode)}" aria-pressed="${seenIt}" aria-label="${escapeHtml(label)}"${title ? ` title="${escapeHtml(title)}"` : ''}>${index + 1}</button>`;
 			}).join('')}</div>
 			<div class="series-season-actions">
 				<label class="visually-hidden" for="season-date-${season.n}">Data della visione della stagione ${season.n}</label>
@@ -79,7 +77,7 @@ export function renderSeriesSection(movie, info, { mode }) {
 		${summary ? `<p class="series-summary">${summary}</p>` : ''}
 		${main}
 		<div class="series-seasons">${seasonBlocks}</div>
-		<p class="series-hint help-text">Tocca un episodio per segnarlo o togliere il segno; tienilo premuto per segnare anche tutti quelli prima.</p>
+		<p class="series-hint help-text">Tocca un episodio per dire quando l’hai visto e lasciare una nota; tienilo premuto per segnare come visti oggi anche tutti quelli prima.</p>
 		<button class="text-button" type="button" data-series-structure>La struttura non è giusta?</button>
 	`;
 }
@@ -119,6 +117,84 @@ export function createSeriesUi({ app, store, details, getData, getState, refresh
 			showErrorToast(error);
 			return;
 		}
+		await proposeVotes(movieId, before, episodes);
+	}
+
+	// Finestra di un episodio: quando l'hai visto e una nota. Salvare segna l'episodio (o lo sposta a un'altra data se
+	// era già segnato); "Togli il segno" lo toglie.
+	const episodeDialog = document.getElementById('series-episode-dialog');
+	const episodeBody = document.getElementById('series-episode-body');
+	let episodeTarget = null;
+
+	function openEpisode(movieId, episode) {
+		const info = getData().seriesOf(movieId);
+		const key = episodeKey(episode);
+		const seen = info.watched.has(key);
+		const detail = info.episodes?.get(key) || null;
+		const movie = getData().movieById(movieId);
+		const title = episodeTitle(info.seasons, episode);
+		episodeTarget = { movieId, episode, seen };
+		episodeBody.innerHTML = `
+			<form class="episode-form" data-episode-form>
+				<p class="viewing-form-title">${escapeHtml(movieName(movie))} <span class="diary-label">· ${escapeHtml(formatEpisode(episode))}</span></p>
+				${title ? `<p class="help-text episode-form-title">«${escapeHtml(title)}»</p>` : ''}
+				<div class="field">
+					<label for="episode-date">${seen ? 'Visto il' : 'Quando l’hai visto?'}</label>
+					<input id="episode-date" name="date" type="date" required value="${escapeHtml(detail?.date || today())}" max="${escapeHtml(today())}">
+				</div>
+				<div class="field">
+					<label for="episode-note">Nota <span>(facoltativa)</span></label>
+					<textarea id="episode-note" name="note" rows="4" maxlength="2000" placeholder="Cosa ti è piaciuto, cosa no…">${escapeHtml(detail?.note || '')}</textarea>
+				</div>
+				<div class="button-row review-form-actions">
+					<button class="button" type="submit">${seen ? 'Salva' : 'Segna come visto'}</button>
+					${seen ? '<button class="button secondary" type="button" data-episode-unmark>Togli il segno</button>' : ''}
+					<button class="button secondary" type="button" data-episode-cancel>Annulla</button>
+				</div>
+			</form>
+		`;
+		document.getElementById('series-episode-title').textContent = seen ? 'Episodio visto' : 'Segna l’episodio';
+		episodeDialog.showModal();
+	}
+
+	episodeDialog.addEventListener('submit', async event => {
+		event.preventDefault();
+		if (!episodeTarget) return;
+		const form = event.target;
+		const { movieId, episode, seen } = episodeTarget;
+		const date = form.elements.date.value;
+		if (!date) return void form.elements.date.reportValidity();
+		const before = getData().seriesOf(movieId);
+		const submit = form.querySelector('button[type="submit"]');
+		submit.disabled = true;
+		try {
+			await store.setEpisode(movieId, episode, { date, note: form.elements.note.value });
+			episodeDialog.close();
+			await refresh();
+			if (seen) showToast('episodeSaved', { label: formatEpisode(episode) });
+			else showToast('episodesMarked', { label: formatEpisode(episode) });
+		} catch (error) {
+			submit.disabled = false;
+			showErrorToast(error);
+			return;
+		}
+		if (!seen) await proposeVotes(movieId, before, [episode]);
+	});
+	episodeDialog.addEventListener('click', async event => {
+		if (event.target.closest('[data-episode-cancel]')) episodeDialog.close();
+		else if (event.target.closest('[data-episode-unmark]') && episodeTarget) {
+			const { movieId, episode } = episodeTarget;
+			episodeDialog.close();
+			await unmark(movieId, [episode]);
+		}
+	});
+	episodeDialog.addEventListener('close', () => {
+		episodeTarget = null;
+		episodeBody.innerHTML = '';
+	});
+
+	// Fine di una stagione o della serie con gli episodi appena segnati: si propone il voto (si può sempre saltare).
+	async function proposeVotes(movieId, before, episodes) {
 		if (!before.seasons) return;
 		// Fine di una stagione o della serie: si propone il voto (si può sempre saltare).
 		const done = completedBy(before.seasons, before.watched, episodes);
@@ -172,9 +248,7 @@ export function createSeriesUi({ app, store, details, getData, getState, refresh
 				longPressed = false;
 				return;
 			}
-			const episode = parseEpisodeKey(episodeButton.dataset.episode);
-			if (getData().seriesOf(movieId).watched.has(episodeButton.dataset.episode)) await unmark(movieId, [episode]);
-			else await mark(movieId, [episode]);
+			openEpisode(movieId, parseEpisodeKey(episodeButton.dataset.episode));
 			return;
 		}
 		const all = event.target.closest('[data-season-all]');
@@ -221,19 +295,6 @@ export function createSeriesUi({ app, store, details, getData, getState, refresh
 		}, LONG_PRESS_MS);
 	}
 	const cancelPress = () => window.clearTimeout(pressTimer);
-
-	async function handleSubmit(event) {
-		const form = event.target.closest('[data-series-quick]');
-		if (!form) return;
-		event.preventDefault();
-		const target = seriesTarget(event);
-		const seasons = Number(form.elements.seasons.value);
-		const episodes = Number(form.elements.episodes.value);
-		if (!(seasons >= 1 && episodes >= 1)) return;
-		await store.saveSeasons(target.movieId, customStructure(null, Array(Math.min(seasons, MAX_SEASONS)).fill(episodes)));
-		await refresh();
-		showToast('seriesStructureSaved');
-	}
 
 	// Aprire una stagione di OMDb non ancora scaricata la chiede a OMDb.
 	function handleToggle(event) {
@@ -348,7 +409,6 @@ export function createSeriesUi({ app, store, details, getData, getState, refresh
 	const movieInfoDialog = document.getElementById('movie-info-dialog');
 	[app, movieInfoDialog].forEach(root => {
 		root.addEventListener('click', handleClick);
-		root.addEventListener('submit', handleSubmit);
 		root.addEventListener('pointerdown', handlePointerDown);
 		['pointerup', 'pointercancel', 'pointerleave'].forEach(type => root.addEventListener(type, cancelPress));
 		root.addEventListener('toggle', handleToggle, true);

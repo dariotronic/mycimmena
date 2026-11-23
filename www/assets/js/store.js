@@ -103,6 +103,18 @@ export function normalizeViewing(input, existing = null) {
 	};
 }
 
+// Note dei singoli episodi di una sessione: { "S-E": testo semplice }, solo per gli episodi della sessione.
+export const MAX_EPISODE_NOTE = 2000;
+export function normalizeEpisodeNotes(notes, episodes) {
+	const keys = new Set(episodes.map(({ s, e }) => `${s}-${e}`));
+	const clean = {};
+	for (const [key, value] of Object.entries(notes && typeof notes === 'object' ? notes : {})) {
+		const text = String(value ?? '').trim().slice(0, MAX_EPISODE_NOTE);
+		if (keys.has(key) && text) clean[key] = text;
+	}
+	return clean;
+}
+
 // Campi delle visioni delle serie: solo se ci sono (i film non li hanno).
 function seriesFields(input, existing) {
 	const scope = SCOPES.includes(input.scope) ? input.scope : (existing?.scope || null);
@@ -111,6 +123,7 @@ function seriesFields(input, existing) {
 	return {
 		scope,
 		episodes: scope === 'episodes' ? episodes : [],
+		episodeNotes: scope === 'episodes' ? normalizeEpisodeNotes(input.episodeNotes ?? existing?.episodeNotes, episodes) : {},
 		season: scope === 'season' ? positiveInt(input.season ?? existing?.season) : null,
 		round: positiveInt(input.round ?? existing?.round) || 1
 	};
@@ -267,19 +280,61 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		});
 	}
 
-	// Toglie il segno a degli episodi del giro corrente. Una sessione rimasta senza episodi, voto e note sparisce.
+	// Toglie degli episodi dalle sessioni del giro corrente (con le loro note). Una sessione rimasta senza episodi,
+	// voto e note sparisce. `keep`: la sessione da non toccare (quella in cui un episodio si sta spostando).
+	async function dropEpisodes(viewings, sessions, keys, keep = null) {
+		for (const viewing of sessions) {
+			if (viewing.id === keep) continue;
+			const remaining = (viewing.episodes || []).filter(({ s, e }) => !keys.has(`${s}-${e}`));
+			if (remaining.length === (viewing.episodes || []).length) continue;
+			if (!remaining.length && !viewing.rating && !viewing.notes) await request(viewings.delete(viewing.id));
+			else await request(viewings.put({ ...viewing, episodes: remaining, episodeNotes: normalizeEpisodeNotes(viewing.episodeNotes, remaining), updatedAt: new Date().toISOString() }));
+		}
+	}
+
 	async function unmarkEpisodes(movieId, episodes) {
 		const keys = new Set(normalizeEpisodes(episodes).map(({ s, e }) => `${s}-${e}`));
 		return transaction(['viewings', 'series'], 'readwrite', async ({ viewings, series }) => {
 			const round = (await currentSeries(series, movieId))?.round || 1;
 			const sessions = (await request(viewings.index('movieId').getAll(movieId)))
 				.filter(viewing => viewing.scope === 'episodes' && (viewing.round || 1) === round);
-			for (const viewing of sessions) {
-				const remaining = (viewing.episodes || []).filter(({ s, e }) => !keys.has(`${s}-${e}`));
-				if (remaining.length === (viewing.episodes || []).length) continue;
-				if (!remaining.length && !viewing.rating && !viewing.notes) await request(viewings.delete(viewing.id));
-				else await request(viewings.put({ ...viewing, episodes: remaining, updatedAt: new Date().toISOString() }));
-			}
+			await dropEpisodes(viewings, sessions, keys);
+		});
+	}
+
+	// Un episodio visto in una data, con la sua nota (testo semplice, '' per toglierla): se era già segnato in un altro
+	// giorno si sposta nella sessione di questa data. Come markEpisodes, la serie passa "in corso" ed esce dalla
+	// watchlist e dalla serata.
+	async function setEpisode(movieId, episode, { date, note = '' }) {
+		if (!DATE.test(String(date || ''))) throw new Error('Data non valida.');
+		const [item] = normalizeEpisodes([episode]);
+		if (!item) throw new Error('Episodio non valido.');
+		const key = `${item.s}-${item.e}`;
+		const text = String(note ?? '').trim();
+		if (text.length > MAX_EPISODE_NOTE) throw new Error(`La nota supera il limite di ${MAX_EPISODE_NOTE.toLocaleString('it-IT')} caratteri.`);
+		return transaction(['movies', 'viewings', 'series', 'watchlist', 'kv'], 'readwrite', async ({ movies, viewings, series, watchlist, kv }) => {
+			if (!(await request(movies.get(movieId)))) throw new Error('Titolo sconosciuto.');
+			const stamp = new Date().toISOString();
+			const record = await currentSeries(series, movieId) || { movieId, status: 'watching', round: 1, startedAt: stamp };
+			const round = record.round || 1;
+			const sessions = (await request(viewings.index('movieId').getAll(movieId)))
+				.filter(viewing => viewing.scope === 'episodes' && (viewing.round || 1) === round);
+			const sameDay = sessions.find(viewing => viewing.date === date);
+			await dropEpisodes(viewings, sessions, new Set([key]), sameDay?.id);
+			const episodes = normalizeEpisodes([...(sameDay?.episodes || []), item]);
+			const episodeNotes = { ...(sameDay?.episodeNotes || {}) };
+			if (text) episodeNotes[key] = text;
+			else delete episodeNotes[key];
+			const viewing = sameDay
+				? { ...sameDay, episodes, episodeNotes: normalizeEpisodeNotes(episodeNotes, episodes), updatedAt: stamp }
+				: normalizeViewing({ movieId, date, scope: 'episodes', episodes, episodeNotes, round });
+			await request(viewings.put(viewing));
+			const nextRecord = { ...record, status: 'watching', updatedAt: stamp };
+			await request(series.put(nextRecord));
+			await request(watchlist.delete(movieId));
+			const planned = await getKv(kv, 'planned');
+			if (planned?.movieIds?.includes(movieId)) await putKv(kv, 'planned', { ...planned, movieIds: planned.movieIds.filter(id => id !== movieId) });
+			return { viewing, series: nextRecord };
 		});
 	}
 
@@ -519,7 +574,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	}
 
 	return {
-		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, setSeriesStatus, restartSeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
+		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, setEpisode, setSeriesStatus, restartSeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
 		addViewing, updateViewing, deleteViewing, getPoster, savePoster, posterIds, requestPersistence, importViewings, getImportJob, saveImportJob, clearImportJob, exportData, restoreData, STORES
 	};
 }

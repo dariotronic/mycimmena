@@ -73,11 +73,12 @@ const { infoButton, titleWithInfo, refreshMovieInfo } = createMovieInfo({
 		await loadData();
 	},
 	renderMyViewings: movie => viewRenderer.renderMyViewings(movie),
-	renderSeries: movie => renderSeriesSection(movie, data.seriesOf(movie.id), { mode: data.mode }),
+	// Gli episodi solo per le serie salvate: un risultato della ricerca non ancora aggiunto ha la scheda semplice, come i film.
+	renderSeries: movie => (data.movieById(movie.id) ? renderSeriesSection(movie, data.seriesOf(movie.id), { mode: data.mode }) : ''),
 	// All'apertura della scheda: dettagli da OMDb se mancano, e per le serie la prima stagione e quella in corso.
 	onShow: movie => {
 		details.ensure(movie.id);
-		if (movie.type === 'series') details.ensureSeasons(movie.id, [1, data.seriesOf(movie.id).next?.s || 1]);
+		if (movie.type === 'series' && data.movieById(movie.id)) details.ensureSeasons(movie.id, [1, data.seriesOf(movie.id).next?.s || 1]);
 	},
 	openViewing: target => diary.openViewingForm(target),
 	onVotesChanged: () => watchlist.updateWatchlistRows(),

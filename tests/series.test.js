@@ -4,7 +4,7 @@ import test from 'node:test';
 import { IDBFactory } from 'fake-indexeddb';
 import { createStore } from '../www/assets/js/store.js';
 import {
-	allEpisodes, completedBy, customStructure, episodesUpTo, formatEpisodes, lostEpisodes, missingOmdbSeasons, nextEpisode,
+	allEpisodes, completedBy, customStructure, episodeDetails, episodesUpTo, formatEpisodes, lostEpisodes, missingOmdbSeasons, nextEpisode,
 	normalizeEpisodes, progress, seasonProgress, structureFromOmdb, watchedEpisodes, withOmdbSeason
 } from '../www/assets/js/series.js';
 
@@ -113,6 +113,36 @@ test('marks episodes into one session per day, moves the series to "watching" an
 	state = await store.loadAll();
 	assert.deepEqual(state.viewings.map(viewing => viewing.episodes), [[{ s: 1, e: 1 }, { s: 1, e: 3 }]]);
 	await assert.rejects(store.markEpisodes(severance.id, [], { date: '2026-11-20' }), /Nessun episodio/);
+});
+
+test('gives each episode its own date and note, moving it between sessions', async () => {
+	const store = freshStore();
+	await store.addToWatchlist([severance]);
+	await store.markEpisodes(severance.id, [{ s: 1, e: 1 }, { s: 1, e: 2 }], { date: '2026-11-20' });
+	// L'episodio 2 in realtà l'ho visto il 21, con una nota: lascia la sessione del 20 e ne apre una il 21.
+	await store.setEpisode(severance.id, { s: 1, e: 2 }, { date: '2026-11-21', note: '  Che finale!  ' });
+	let state = await store.loadAll();
+	const byDate = date => state.viewings.find(viewing => viewing.date === date);
+	assert.deepEqual(byDate('2026-11-20').episodes, [{ s: 1, e: 1 }]);
+	assert.deepEqual(byDate('2026-11-21').episodes, [{ s: 1, e: 2 }]);
+	assert.deepEqual(byDate('2026-11-21').episodeNotes, { '1-2': 'Che finale!' });
+	let details = episodeDetails(state.viewings, severance.id);
+	assert.deepEqual(details.get('1-2'), { date: '2026-11-21', note: 'Che finale!', viewingId: byDate('2026-11-21').id });
+	// Un episodio nuovo con la sua data; spostare l'1 al 21 svuota la sessione del 20, che sparisce.
+	await store.setEpisode(severance.id, { s: 1, e: 3 }, { date: '2026-11-22' });
+	await store.setEpisode(severance.id, { s: 1, e: 1 }, { date: '2026-11-21', note: 'Pilota lento' });
+	state = await store.loadAll();
+	assert.deepEqual(state.viewings.map(viewing => viewing.date).sort(), ['2026-11-21', '2026-11-22']);
+	assert.deepEqual(byDate('2026-11-21').episodeNotes, { '1-1': 'Pilota lento', '1-2': 'Che finale!' });
+	// Togliere la nota la cancella; togliere il segno all'episodio porta via anche la sua nota.
+	await store.setEpisode(severance.id, { s: 1, e: 1 }, { date: '2026-11-21', note: '' });
+	await store.unmarkEpisodes(severance.id, [{ s: 1, e: 2 }]);
+	state = await store.loadAll();
+	assert.deepEqual(byDate('2026-11-21').episodes, [{ s: 1, e: 1 }]);
+	assert.deepEqual(byDate('2026-11-21').episodeNotes, {});
+	details = episodeDetails(state.viewings, severance.id);
+	assert.equal(details.has('1-2'), false);
+	await assert.rejects(store.setEpisode(severance.id, { s: 1, e: 1 }, { date: 'ieri' }), /Data non valida/);
 });
 
 test('rates seasons and the whole series, changes status and starts a new round', async () => {

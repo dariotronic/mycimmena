@@ -9,6 +9,7 @@ import { soundEnabled } from './slot-sounds.js';
 import { APP_VERSION, CREDIT_HANDLE, CREDIT_URL, REPO_URL } from './app-info.js';
 import { birthdayFields, birthdayMonthDay, COMPANY, diaryDefaults, flavourLine, isBirthday, LANGUAGES, PLACES, POPCORN, SPECTATORS } from './profile.js';
 import { renderWatchingRow } from './series-ui.js';
+import { formatEpisode, parseEpisodeKey } from './series.js';
 import { IMPORT_SOURCES } from './watchlist-import.js';
 
 // Gatto SVG (simboli #cat-full e #cat-empty in index.html): la sagoma vuota sotto, quella calico sopra,
@@ -252,7 +253,7 @@ export function createViews(context) {
 				</div>
 				${scheduledMovies.length ? `
 					<section class="field full movie-picks" aria-labelledby="scheduled-films-title">
-						<h3 id="scheduled-films-title" class="field-label">Titoli in programma</h3>
+						<p id="scheduled-films-title" class="field-label">Titoli in programma</p>
 						<div class="calendar-film-list">${scheduledRows}</div>
 					</section>
 				` : '<p class="field full help-text">Nessun titolo in programma: aggiungili dalla scheda di un titolo della watchlist.</p>'}
@@ -310,7 +311,9 @@ export function createViews(context) {
 	function diaryRow(viewing) {
 		const movie = viewing.movie;
 		const meta = viewingMeta(viewing);
-		const notes = sanitizeNotes(viewing.notes).text.replace(/s+/g, ' ').trim();
+		// Senza note della sessione, quelle dei singoli episodi: "S1·E3: …".
+		const episodeNotes = Object.entries(viewing.episodeNotes || {}).map(([key, text]) => `${formatEpisode(parseEpisodeKey(key))}: ${text}`).join(' · ');
+		const notes = (sanitizeNotes(viewing.notes).text || episodeNotes).replace(/s+/g, ' ').trim();
 		return `
 			<article class="archive-film-row diary-row">
 				${moviePosterButton(movie, 'archive-film-poster')}

@@ -1012,6 +1012,12 @@ html[data-onboarding="true"] .site-shell > :not(dialog) { display: none; }
 .episode { min-height: 40px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .episode.seen { border-color: var(--rust); background: var(--rust); color: var(--paper); }
 .episode:focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
+/* Episodio con una nota: un puntino nell'angolo. */
+.episode { position: relative; }
+.episode.has-note::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--apricot); }
+.episode-form { display: grid; gap: 14px; }
+.episode-form .field textarea { width: 100%; min-height: 96px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; resize: vertical; }
+.episode-form-title { margin: -8px 0 0; }
 .series-season-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 12px 12px; font-size: .8rem; }
 .series-season-actions input { min-height: 34px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: inherit; }
 .series-hint { margin: 0; font-size: .75rem; }

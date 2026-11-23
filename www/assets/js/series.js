@@ -75,6 +75,22 @@ export function watchedEpisodes(viewings, movieId, round = 1) {
 	return watched;
 }
 
+// Per ogni episodio visto nel giro corrente: quando (la data della sessione) e la sua nota. Se per errore un episodio
+// sta in due sessioni vale la più recente.
+export function episodeDetails(viewings, movieId, round = 1) {
+	const details = new Map();
+	const sessions = (viewings || [])
+		.filter(viewing => viewing.movieId === movieId && (viewing.round || 1) === round && viewing.scope === 'episodes')
+		.sort((first, second) => String(first.date).localeCompare(String(second.date)));
+	for (const viewing of sessions) {
+		for (const episode of viewing.episodes || []) {
+			const key = episodeKey(episode);
+			details.set(key, { date: viewing.date, note: viewing.episodeNotes?.[key] || '', viewingId: viewing.id });
+		}
+	}
+	return details;
+}
+
 export function nextEpisode(seasons, watched) {
 	return allEpisodes(seasons).find(episode => !watched.has(episodeKey(episode))) || null;
 }

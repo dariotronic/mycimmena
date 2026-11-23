@@ -1,7 +1,7 @@
 // Modello dati delle viste: da quello che c'è in store.js all'oggetto `data` che le viste leggono
 // (sul sito era la risposta del server). Niente DOM, così si testa da solo.
 import { detailModeOf } from './details.js';
-import { formatEpisodes, nextEpisode, progress, watchedEpisodes } from './series.js';
+import { episodeDetails, formatEpisodes, nextEpisode, progress, watchedEpisodes } from './series.js';
 
 // Un titolo del catalogo nel formato delle viste: `poster` è l'URL di IMDb, `poster_local` la copia sul telefono.
 // I dettagli (regista, trama…) arrivano da OMDb in modalità completa; in light ci sono gli attori principali di IMDb.
@@ -45,6 +45,8 @@ export function seriesProgress(state, movieId) {
 		round,
 		startedAt: record?.startedAt || null,
 		watched,
+		// Data e nota di ogni episodio visto (series.js, episodeDetails).
+		episodes: episodeDetails(state?.viewings || [], movieId, round),
 		seasons,
 		next,
 		...(seasons ? progress(seasons, watched) : { seen: watched.size, total: 0, remaining: 0 })
