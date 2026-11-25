@@ -10,9 +10,11 @@
 // - posters    locandine salvate per vederle offline: { movieId, blob, savedAt }
 // - kv         record singoli per chiave: 'planned' (la serata in programma), 'profile', 'settings', 'onboarding', 'meta',
 //              'import' (l'importazione della watchlist in corso, vedi watchlist-import.js)
-// - series     avanzamento delle serie (dalla versione 2): { movieId, status, round, startedAt, updatedAt }
+// - series     avanzamento delle serie (dalla versione 2): { movieId, status, notes, startedAt, updatedAt } (round, dei
+//              giri fino alla 1.0, non si usa più)
 import { sanitizeNotes } from './sanitize.js';
-import { normalizeEpisodes, SERIES_STATUSES } from './series.js';
+import { escapeHtml as escapeText, formatDate as italianDate, today as localToday } from './domain.js';
+import { formatEpisodes, normalizeEpisodes, SERIES_STATUSES } from './series.js';
 
 export const DB_NAME = 'mycimmena';
 export const SCHEMA_VERSION = 2;
@@ -77,6 +79,8 @@ const validHype = value => (value === null || value === undefined ? null
 	: (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 5 ? Number(value) : undefined));
 const cleanText = (value, max) => String(value ?? '').trim().slice(0, max) || null;
 const SCOPES = ['episodes', 'season', 'series'];
+// Etichetta di una nota spostata nella nota della serie (simplifySeries).
+const noteLabel = (viewing, seasons) => (viewing.scope === 'episodes' ? formatEpisodes(viewing.episodes, seasons) || 'Episodi' : viewing.scope === 'season' ? `Stagione ${viewing.season}` : 'La serie');
 const positiveInt = value => (Number.isInteger(Number(value)) && Number(value) >= 1 ? Number(value) : null);
 
 // Visione pronta da salvare, con i controlli che il server del sito faceva sulle recensioni.
@@ -98,8 +102,6 @@ export function normalizeViewing(input, existing = null) {
 		rating,
 		notes: notes.html,
 		...seriesFields(input, existing),
-		// Voto di un episodio arrivato dal voto alla stagione (applySeasonRating): segue la stagione finché non lo si cambia.
-		...(input.ratingFrom === 'season' && rating !== null ? { ratingFrom: 'season' } : {}),
 		createdAt: existing?.createdAt || input.createdAt || stamp,
 		updatedAt: stamp
 	};
@@ -256,26 +258,28 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		return nextRecord;
 	}
 
-	// Visioni degli episodi del giro corrente di una serie.
-	async function episodeSessions(viewings, movieId, round) {
-		return (await request(viewings.index('movieId').getAll(movieId)))
-			.filter(viewing => viewing.scope === 'episodes' && (viewing.round || 1) === round);
+	// Visioni degli episodi di una serie (di tutte le volte che la si è vista).
+	async function episodeSessions(viewings, movieId) {
+		return (await request(viewings.index('movieId').getAll(movieId))).filter(viewing => viewing.scope === 'episodes');
 	}
 
-	// Segna episodi visti in una data: ognuno diventa una visione a sé nel diario (con la sua card, voto e note).
-	// Gli episodi già segnati nel giro corrente si saltano.
+	// Segna episodi visti in una data: ognuno diventa una visione a sé nel diario (data, dove, con chi; voto e note
+	// sono della stagione e della serie). Gli episodi già segnati si saltano.
 	async function markEpisodes(movieId, episodes, { date }) {
 		if (!DATE.test(String(date || ''))) throw new Error('Data non valida.');
 		const list = normalizeEpisodes(episodes);
 		if (!list.length) throw new Error('Nessun episodio da segnare.');
 		return transaction(['movies', 'viewings', 'series', 'watchlist', 'kv'], 'readwrite', async ({ movies, viewings, series, watchlist, kv }) => {
 			if (!(await request(movies.get(movieId)))) throw new Error('Titolo sconosciuto.');
-			const round = (await currentSeries(series, movieId))?.round || 1;
-			const watched = new Set((await episodeSessions(viewings, movieId, round)).flatMap(viewing => (viewing.episodes || []).map(({ s, e }) => `${s}-${e}`)));
+			const sessions = await episodeSessions(viewings, movieId);
+			const watched = new Set(sessions.flatMap(viewing => (viewing.episodes || []).map(({ s, e }) => `${s}-${e}`)));
+			// Dove e con chi: quelli dell'ultimo episodio della serie che li ha (si cambiano dal giorno, nel diario).
+			const last = sessions.filter(viewing => viewing.place || viewing.withWhom)
+				.sort((first, second) => String(second.date).localeCompare(String(first.date)) || String(second.updatedAt || '').localeCompare(String(first.updatedAt || '')))[0];
 			const created = [];
 			for (const episode of list) {
 				if (watched.has(`${episode.s}-${episode.e}`)) continue;
-				const viewing = normalizeViewing({ movieId, date, scope: 'episodes', episodes: [episode], round });
+				const viewing = normalizeViewing({ movieId, date, place: last?.place, withWhom: last?.withWhom, scope: 'episodes', episodes: [episode] });
 				await request(viewings.put(viewing));
 				created.push(viewing);
 			}
@@ -284,64 +288,62 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		});
 	}
 
-	// Toglie il segno a degli episodi del giro corrente. Una visione rimasta senza episodi, voto e note sparisce
-	// (le visioni di più episodi insieme vengono dalle versioni fino alla 0.5).
+	// Toglie il segno a degli episodi: le loro visioni spariscono dal diario (quelle di più episodi insieme, delle
+	// versioni fino alla 0.5, perdono solo quegli episodi).
 	async function unmarkEpisodes(movieId, episodes) {
 		const keys = new Set(normalizeEpisodes(episodes).map(({ s, e }) => `${s}-${e}`));
 		return transaction(['viewings', 'series'], 'readwrite', async ({ viewings, series }) => {
 			const record = await currentSeries(series, movieId);
-			for (const viewing of await episodeSessions(viewings, movieId, record?.round || 1)) {
+			for (const viewing of await episodeSessions(viewings, movieId)) {
 				const remaining = (viewing.episodes || []).filter(({ s, e }) => !keys.has(`${s}-${e}`));
 				if (remaining.length === (viewing.episodes || []).length) continue;
-				if (!remaining.length && !viewing.rating && !viewing.notes) await request(viewings.delete(viewing.id));
-				else await request(viewings.put({ ...viewing, episodes: remaining, updatedAt: new Date().toISOString() }));
+				if (!remaining.length) await request(viewings.delete(viewing.id));
+				else await request(viewings.put({ ...viewing, episodes: remaining, updatedAt: nowIso() }));
 			}
 			// Con un episodio in meno la serie non è più finita.
-			if (record?.status === 'finished') await request(series.put({ ...record, status: 'watching', updatedAt: new Date().toISOString() }));
+			if (record?.status === 'finished') await request(series.put({ ...record, status: 'watching', updatedAt: nowIso() }));
 		});
 	}
 
-	// La visione di un singolo episodio già segnato, per aprirla nel diario. Se l'episodio sta in una visione di più
-	// episodi (versioni fino alla 0.5) ne esce e ne diventa una sua, con la stessa data, dove e con chi; voto e note
-	// restano a quella di prima. Restituisce l'id della visione, o null se l'episodio non è segnato.
-	async function splitEpisode(movieId, episode) {
-		const [item] = normalizeEpisodes([episode]);
-		if (!item) throw new Error('Episodio non valido.');
-		const key = `${item.s}-${item.e}`;
-		return transaction(['viewings', 'series'], 'readwrite', async ({ viewings, series }) => {
-			const round = (await currentSeries(series, movieId))?.round || 1;
-			const session = (await episodeSessions(viewings, movieId, round))
-				.find(viewing => (viewing.episodes || []).some(({ s, e }) => `${s}-${e}` === key));
-			if (!session) return null;
-			if (session.episodes.length === 1) return session.id;
-			const stamp = new Date().toISOString();
-			await request(viewings.put({ ...session, episodes: session.episodes.filter(({ s, e }) => `${s}-${e}` !== key), updatedAt: stamp }));
-			const own = normalizeViewing({ movieId, date: session.date, place: session.place, withWhom: session.withWhom, scope: 'episodes', episodes: [item], round });
-			await request(viewings.put(own));
-			return own.id;
-		});
-	}
-
-	// Voto dato a una stagione intera: vale anche per gli episodi visti di quella stagione (giro corrente) che non hanno
-	// un voto loro, o che lo avevano preso dalla stagione. Voto null: quegli episodi tornano senza voto.
-	async function applySeasonRating(movieId, season, rating) {
-		const value = validRating(rating);
-		if (value === undefined) throw new Error('Il voto va da mezza spipa a dieci spipe, a passi di mezza.');
-		return transaction(['viewings', 'series'], 'readwrite', async ({ viewings, series }) => {
-			const round = (await currentSeries(series, movieId))?.round || 1;
+	// Un giorno di episodi di una serie (il diario li mostra insieme): data, dove e con chi valgono per tutti.
+	async function updateEpisodeDay(movieId, date, input) {
+		const nextDate = String(input.date || '');
+		if (!DATE.test(nextDate)) throw new Error('Indica la data della visione.');
+		return transaction('viewings', 'readwrite', async ({ viewings }) => {
 			let changed = 0;
-			for (const viewing of await episodeSessions(viewings, movieId, round)) {
-				const episodes = viewing.episodes || [];
-				if (!episodes.length || !episodes.every(({ s }) => s === Number(season))) continue;
-				const own = viewing.rating !== null && viewing.rating !== undefined && viewing.ratingFrom !== 'season';
-				if (own || (viewing.rating ?? null) === value) continue;
-				const next = { ...viewing, rating: value, updatedAt: new Date().toISOString() };
-				if (value === null) delete next.ratingFrom;
-				else next.ratingFrom = 'season';
-				await request(viewings.put(next));
+			for (const viewing of await episodeSessions(viewings, movieId)) {
+				if (viewing.date !== date) continue;
+				await request(viewings.put(normalizeViewing({ ...viewing, date: nextDate, place: input.place, withWhom: input.withWhom }, viewing)));
 				changed += 1;
 			}
 			return changed;
+		});
+	}
+
+	// Voto a una stagione (scope 'season', con season) o a tutta la serie (scope 'series'): uno solo per ciascuna, nel
+	// diario come voto (non come visione). rating null lo toglie.
+	async function setSeriesVote(movieId, { scope, season = null, rating }) {
+		if (!['season', 'series'].includes(scope)) throw new Error('Voto della serie non valido.');
+		const value = validRating(rating);
+		if (value === undefined) throw new Error('Il voto va da mezza spipa a dieci spipe, a passi di mezza.');
+		const n = scope === 'season' ? positiveInt(season) : null;
+		if (scope === 'season' && !n) throw new Error('Stagione non valida.');
+		return transaction(['movies', 'viewings'], 'readwrite', async ({ movies, viewings }) => {
+			if (!(await request(movies.get(movieId)))) throw new Error('Titolo sconosciuto.');
+			const votes = (await request(viewings.index('movieId').getAll(movieId)))
+				.filter(viewing => viewing.scope === scope && (scope === 'series' || viewing.season === n))
+				.sort((first, second) => String(second.date).localeCompare(String(first.date)) || String(second.updatedAt || '').localeCompare(String(first.updatedAt || '')));
+			if (value === null) {
+				for (const viewing of votes) await request(viewings.delete(viewing.id));
+				return null;
+			}
+			const [latest, ...older] = votes;
+			for (const viewing of older) await request(viewings.delete(viewing.id));
+			const viewing = latest
+				? normalizeViewing({ ...latest, rating: value }, latest)
+				: normalizeViewing({ movieId, date: localToday(), scope, season: n, rating: value });
+			await request(viewings.put(viewing));
+			return viewing;
 		});
 	}
 
@@ -352,7 +354,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		return transaction(['movies', 'series'], 'readwrite', async ({ movies, series }) => {
 			if (!(await request(movies.get(movieId)))) throw new Error('Titolo sconosciuto.');
 			const stamp = new Date().toISOString();
-			const record = { ...(await currentSeries(series, movieId) || { movieId, status: null, round: 1, startedAt: null }), notes: notes.text.trim() ? notes.html : '', updatedAt: stamp };
+			const record = { ...(await currentSeries(series, movieId) || { movieId, status: null, startedAt: null }), notes: notes.text.trim() ? notes.html : '', updatedAt: stamp };
 			await request(series.put(record));
 			return record;
 		});
@@ -362,21 +364,73 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		if (!(status in SERIES_STATUSES)) throw new Error('Stato della serie non valido.');
 		return transaction('series', 'readwrite', async ({ series }) => {
 			const stamp = new Date().toISOString();
-			const record = { ...(await currentSeries(series, movieId) || { movieId, round: 1, startedAt: stamp }), status, updatedAt: stamp };
+			const record = { ...(await currentSeries(series, movieId) || { movieId, startedAt: stamp }), status, updatedAt: stamp };
 			await request(series.put(record));
 			return record;
 		});
 	}
 
-	// "Ricomincia da capo": nuovo giro, il precedente resta nel diario.
-	async function restartSeries(movieId) {
-		return transaction('series', 'readwrite', async ({ series }) => {
-			const stamp = new Date().toISOString();
-			const previous = await currentSeries(series, movieId);
-			// Il nuovo giro tiene la nota della serie.
-			const record = { ...(previous || {}), movieId, status: 'watching', round: (previous?.round || 0) + 1, startedAt: stamp, updatedAt: stamp };
-			await request(series.put(record));
-			return record;
+	// Serie più semplici (1.1): gli episodi non hanno più voto e note loro. Si fa all'avvio e dopo un ripristino, e
+	// non perde niente:
+	// - le note di episodi, stagioni e serie finiscono in fondo alla nota della serie, con l'episodio e la data;
+	// - i voti degli episodi diventano il voto della loro stagione (la media), se la stagione non ne ha uno;
+	// - i voti che gli episodi avevano preso dalla stagione si tolgono (restano sulla stagione).
+	// Restituisce quante visioni ha cambiato (0 se non c'era niente da fare).
+	async function simplifySeries() {
+		return transaction(['movies', 'viewings', 'series'], 'readwrite', async ({ movies, viewings, series }) => {
+			const byMovie = new Map();
+			for (const viewing of await request(viewings.getAll())) {
+				if (!viewing.scope) continue;
+				if (!byMovie.has(viewing.movieId)) byMovie.set(viewing.movieId, []);
+				byMovie.get(viewing.movieId).push(viewing);
+			}
+			let changed = 0;
+			for (const [movieId, list] of byMovie) {
+				const movie = await request(movies.get(movieId));
+				const notes = [];
+				const ratings = new Map();
+				const lastDate = new Map();
+				for (const viewing of list) {
+					const isEpisode = viewing.scope === 'episodes';
+					const note = sanitizeNotes(String(viewing.notes || ''));
+					const hasNote = Boolean(note.text.trim());
+					const hasRating = viewing.rating !== null && viewing.rating !== undefined;
+					if (isEpisode) {
+						const s = viewing.episodes?.[0]?.s;
+						if (s && (viewing.episodes || []).every(episode => episode.s === s)) {
+							if (hasRating && viewing.ratingFrom !== 'season') ratings.set(s, [...(ratings.get(s) || []), Number(viewing.rating)]);
+							if (String(viewing.date) > String(lastDate.get(s) || '')) lastDate.set(s, viewing.date);
+						}
+					}
+					if (hasNote) notes.push({ date: viewing.date, label: noteLabel(viewing, movie?.seasons), html: note.html });
+					if (!hasNote && !(isEpisode && (hasRating || 'ratingFrom' in viewing))) continue;
+					const next = { ...viewing, notes: '', updatedAt: nowIso() };
+					if (isEpisode) next.rating = null;
+					delete next.ratingFrom;
+					await request(viewings.put(next));
+					changed += 1;
+				}
+				for (const [s, values] of ratings) {
+					const votes = list.filter(viewing => viewing.scope === 'season' && viewing.season === s);
+					if (votes.some(viewing => viewing.rating !== null && viewing.rating !== undefined)) continue;
+					const rating = Math.max(0.5, Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 2) / 2);
+					const empty = votes[0] ? await request(viewings.get(votes[0].id)) : null;
+					await request(viewings.put(empty
+						? normalizeViewing({ ...empty, rating }, empty)
+						: normalizeViewing({ movieId, date: lastDate.get(s) || localToday(), scope: 'season', season: s, rating })));
+					changed += 1;
+				}
+				if (!notes.length) continue;
+				const record = await currentSeries(series, movieId) || { movieId, status: null, startedAt: null, notes: '' };
+				const current = String(record.notes || '');
+				const added = notes
+					.sort((first, second) => String(first.date).localeCompare(String(second.date)))
+					.filter(note => !current.includes(note.html))
+					.map(note => `<p><strong>${escapeText(note.label)}</strong> · ${escapeText(italianDate(note.date))}</p>${note.html}`)
+					.join('');
+				if (added) await request(series.put({ ...record, notes: sanitizeNotes(current + added).html, updatedAt: nowIso() }));
+			}
+			return changed;
 		});
 	}
 
@@ -477,8 +531,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 			const existing = await request(viewings.get(id));
 			if (!existing) throw new Error('Questa visione non esiste più.');
 			const merged = { ...existing, ...input };
-			// Un voto cambiato a mano non segue più quello della stagione.
-			if ('rating' in input && validRating(input.rating) !== (existing.rating ?? null)) delete merged.ratingFrom;
+			delete merged.ratingFrom;
 			const viewing = normalizeViewing(merged, existing);
 			await request(viewings.put(viewing));
 			return viewing;
@@ -541,7 +594,14 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	// Ripristino di un backup già controllato da backup.js (parseBackup), tutto in una transazione.
 	// - 'replace': i dati attuali si cancellano e restano quelli del backup (le locandine salvate restano).
 	// - 'merge': per ogni voce vince quella modificata più di recente; le voci che ci sono da una parte sola restano.
-	async function restoreData(data, { mode = 'merge' } = {}) {
+	// Dopo il ripristino, un backup delle versioni fino alla 1.0 passa alle serie semplici (simplifySeries).
+	async function restoreData(data, options) {
+		const result = await restoreBackup(data, options);
+		await simplifySeries();
+		return result;
+	}
+
+	async function restoreBackup(data, { mode = 'merge' } = {}) {
 		if (!['merge', 'replace'].includes(mode)) throw new Error('Modo di ripristino sconosciuto.');
 		const hasValidKey = settings => Boolean(settings?.omdbKey) && settings.omdbKeyStatus === 'valid';
 		return transaction(['movies', 'watchlist', 'viewings', 'series', 'kv'], 'readwrite', async ({ movies, watchlist, viewings, series, kv }) => {
@@ -639,7 +699,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	}
 
 	return {
-		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, splitEpisode, applySeasonRating, setSeriesNote, setSeriesStatus, restartSeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
+		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, updateEpisodeDay, setSeriesVote, setSeriesNote, setSeriesStatus, simplifySeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
 		addViewing, updateViewing, deleteViewing, getPoster, savePoster, posterIds, requestPersistence, importViewings, getImportJob, saveImportJob, clearImportJob, exportData, restoreData, STORES
 	};
 }

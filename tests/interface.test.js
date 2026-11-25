@@ -63,22 +63,35 @@ test('turns onboarding answers into diary defaults, a flavour line and birthday 
 	assert.deepEqual(STEPS, ['welcome', 'who', 'chat', 'cards', 'confirm', 'key', 'backup', 'import', 'end']);
 });
 
-test('shows the next episode, season progress and episode titles in the series card', () => {
+test('shows the series card in four blocks: progress, seasons, verdict and the diary of the series', () => {
 	const data = buildAppData(state);
 	const info = data.seriesOf('tt11280740');
 	assert.deepEqual(info.next, { s: 1, e: 3 });
 	assert.equal(info.remaining, 3);
 	const html = renderSeriesSection(data.movieById('tt11280740'), info, { mode: 'light' });
-	assert.match(html, /Prossimo: <strong>S1·E3 «Tre»<\/strong> · 3 episodi rimasti/);
+	// Stato e avanzamento: un menù, la barra, il pulsante e la data (oggi) per tutto quello che si segna.
+	assert.match(html, /<select class="series-status-select" data-series-status aria-label="Stato della serie"><option value="watching" selected>In corso<\/option>/);
+	assert.match(html, /<span class="series-count">2 di 5 episodi<\/span>/);
 	assert.match(html, /data-series-next data-movie-id="tt11280740"[^>]*>.*Visto S1·E3/s);
+	assert.match(html, /<span class="series-date-text" aria-hidden="true">oggi<\/span>/);
+	assert.match(html, /<input type="date" value="[\d-]+" max="[\d-]+" data-series-date>/);
+	assert.match(html, /Prossimo: <strong>S1·E3 «Tre»<\/strong> · 3 episodi rimasti/);
+	// Stagioni: righe con avanzamento e voto, la griglia dentro; nessun campo data per stagione.
 	assert.match(html, /<details class="series-season" data-season="1" open>/);
-	assert.match(html, /<span class="series-season-count">2\/3<\/span>/);
+	assert.match(html, /<span class="series-season-count">2\/3 · <strong>9 spipe su 10<\/strong><\/span>/);
 	assert.match(html, /data-episode="1-1" aria-pressed="true" aria-label="S1·E1 Pilota, visto il [^"]+"/);
-	assert.match(html, /data-season="2">\s*<summary><span>Stagione 2<\/span><span class="series-custom-badge">inserita da te<\/span>/);
-	assert.match(html, /data-series-structure>La struttura non è giusta\?/);
-	// Senza struttura: il modulo veloce con stagioni ed episodi per stagione.
+	assert.match(html, /<span class="series-season-name">Stagione 2<span class="series-custom-badge">inserita da te<\/span><\/span>/);
+	assert.match(html, /data-series-vote="season" data-season="1" data-saved="9"/);
+	assert.doesNotMatch(html, /data-season-date|data-series-restart|La struttura non è giusta|Aggiungi una stagione/);
+	assert.match(html, /data-series-structure>Modifica stagioni</);
+	// Il tuo giudizio: voto alla serie e nota; il diario della serie, un giorno per riga.
+	assert.match(html, /data-series-vote="series" data-saved="8.5"/);
+	assert.match(html, /data-series-note>Scrivi una nota sulla serie</);
+	assert.match(html, /data-series-day="2026-11-20"[^>]*>\s*<span><strong>[^<]+<\/strong> · S1 · E1–E2<\/span>/);
+	// Senza struttura: il pulsante per indicarla.
 	const empty = renderSeriesSection({ id: 'tt1', has_details: false }, { seasons: null, watched: new Set(), status: null }, { mode: 'light' });
-	assert.match(empty, /data-series-structure>Indica stagioni ed episodi/, "senza struttura si apre l’editor stagione per stagione");
+	assert.match(empty, /data-series-structure>Indica stagioni ed episodi/);
+	assert.match(empty, /<option value="" selected>Nessuno stato<\/option>/);
 	assert.match(empty, /indica le stagioni della serie/);
 	assert.match(renderSeriesSection({ id: 'tt1', has_details: false }, { seasons: null, watched: new Set() }, { mode: 'full' }), /Caricamento delle stagioni da OMDb/);
 });
@@ -98,27 +111,19 @@ test('lists series in progress under "Stai guardando" with a quick button for th
 	assert.match(makeViews(data).renderMovieList(), /Stai guardando/);
 });
 
-test('groups "I miei voti" of a series: overall vote, seasons, then sessions', () => {
+test('keeps "I miei voti" for films only: series have everything in their card', () => {
 	const data = buildAppData(state);
-	const html = makeViews(data).renderMyViewings(data.movieById('tt11280740'));
-	assert.match(html, /Serie: 8 spipe e ½ su 10/);
-	assert.match(html, /<li class="series-vote-row"><span>Stagione 1<\/span><span>9 spipe su 10<\/span><\/li>/);
-	assert.match(html, /il 2026-11-20 · S1·E1–E2/);
+	const views = makeViews(data);
+	assert.equal(views.renderMyViewings(data.movieById('tt11280740')), '');
 	assert.deepEqual(data.viewings.map(viewing => viewing.label), ['Stagione 1', 'Voto alla serie', 'S1·E1–E2']);
 });
 
-test('opens the rating form for a season without proposing place and company', () => {
+test('proposes place and company from the onboarding for a new film viewing', () => {
 	const data = buildAppData(state);
-	const views = makeViews(data);
-	const season = views.renderViewingForm({ movie: data.movieById('tt11280740'), scope: 'season', season: 2 });
-	assert.match(season, /data-viewing-form data-scope="season" data-season="2"/);
-	assert.match(season, /Severance \(2022\) <span class="diary-label">· Stagione 2<\/span>/);
-	assert.match(season, /name="place" type="text" maxlength="120" value=""/);
-	assert.doesNotMatch(season, /removeFromWatchlist/);
-	// Una visione nuova di un film propone le risposte dell'onboarding.
-	const film = views.renderViewingForm({ movie: data.movieById('tt0084787') });
+	const film = makeViews(data).renderViewingForm({ movie: data.movieById('tt0084787') });
 	assert.match(film, /name="place" type="text" maxlength="120" value="Divano"/);
 	assert.match(film, /name="withWhom" type="text" maxlength="120" value="la mia metà"/);
+	assert.doesNotMatch(film, /data-scope/);
 });
 
 test('shows profile, detail mode, key actions, info page and credit in Settings', () => {
@@ -173,18 +178,21 @@ test('greets on the birthday and wires onboarding, banner, key dialog and Androi
 	assert.match(keySetup, /document\.addEventListener\('visibilitychange', onVisible\)/);
 });
 
-test('lets the user mark a series as completed, vote a season and keep a note on it', () => {
+test('lets the user pick any status, invites to vote a finished season and keeps a note', () => {
 	const seasons = { source: 'custom', list: [{ n: 1, episodes: 2, titles: null, source: 'custom' }] };
-	const info = { seasons, watched: new Set(['1-1']), next: { s: 1, e: 2 }, status: 'watching', remaining: 1, total: 2, episodes: new Map(), notes: '', seasonVotes: new Map() };
+	const info = { seasons, watched: new Set(['1-1', '1-2']), next: null, status: 'finished', remaining: 0, total: 2, seen: 2, episodes: new Map(), notes: '', seasonVotes: new Map(), seriesVote: null, days: [] };
 	const movie = { id: 'tt11280740', title: 'Severance', type: 'series', has_details: true };
 	const html = renderSeriesSection(movie, info, { mode: 'light' });
-	assert.deepEqual([...html.matchAll(/data-series-status="(\w+)" aria-pressed="(\w+)">([^<]+)</g)].map(match => [match[1], match[3]]), [['watching', 'In corso'], ['paused', 'In pausa'], ['finished', 'Completata'], ['dropped', 'Abbandonata']]);
-	assert.match(html, /data-season-vote="1">Vota la stagione</);
-	assert.match(html, /data-series-note>Scrivi una nota sulla serie</);
-	const voted = renderSeriesSection(movie, { ...info, status: null, notes: '<p>Da finire</p>', seasonVotes: new Map([[1, { id: 'v', rating: 8 }]]) }, { mode: 'light' });
-	assert.match(voted, /Voto alla stagione: 8 spipe su 10/);
+	assert.deepEqual([...html.matchAll(/<option value="(\w+)"( selected)?>([^<]+)</g)].map(match => [match[1], match[3]]), [['watching', 'In corso'], ['paused', 'In pausa'], ['finished', 'Completata'], ['dropped', 'Abbandonata']]);
+	assert.match(html, /<option value="finished" selected>Completata/);
+	assert.match(html, /Hai visto tutti gli episodi\./);
+	assert.match(html, /<span class="series-season-invite">Finita! Vota la stagione<\/span>/);
+	assert.doesNotMatch(html, /data-season-all/, 'stagione già vista tutta');
+	const voted = renderSeriesSection(movie, { ...info, status: null, notes: '<p>Da finire</p>', seasonVotes: new Map([[1, 8]]) }, { mode: 'light' });
+	assert.doesNotMatch(voted, /series-season-invite/);
+	assert.match(voted, /data-series-vote-clear>Togli il voto/);
 	assert.match(voted, /<div class="review-content series-note-text"><p>Da finire<\/p><\/div>/);
-	assert.match(voted, /data-series-status="watching" aria-pressed="false"/, 'gli stati si scelgono anche prima di iniziare');
+	assert.match(voted, /<option value="" selected>Nessuno stato<\/option><option value="watching">In corso/, 'gli stati si scelgono anche prima di iniziare');
 });
 
 test('replaces every drop-down with a sheet in the app style, and Back closes it first', () => {

@@ -184,53 +184,39 @@ test('wires the diary, search, posters and evening to the local store', () => {
 	assert.doesNotMatch(index, /reviews-dialog-body|id="reviews-dialog"/);
 });
 
-test('groups the episodes of a series seen on the same day in one diary card that opens into one card per episode', () => {
+test('shows the episodes of a series seen on the same day in one diary row, edited together', () => {
 	const dark = { id: 'tt5753856', title: 'Dark', year: '2017', type: 'series', seasons: { list: [{ n: 1, episodes: 10, titles: ['Segreti', 'Bugie', 'Passato e presente'] }] } };
 	const film = { id: 'tt1', title: 'Alien', year: '1979' };
 	const episode = (id, date, list, extra = {}) => ({ id, movieId: dark.id, date, scope: 'episodes', episodes: list, round: 1, movie: dark, notes: '', rating: null, ...extra });
 	const data = {
 		movies: [],
 		viewings: [
-			// Il 23: E3 visione sua (con voto e nota), E1–E2 insieme come nelle versioni fino alla 0.5, e un film.
-			episode('e3', '2026-11-23', [{ s: 1, e: 3 }], { rating: 8, notes: '<p>Che finale</p>' }),
+			// Il 23: E3, E1–E2 insieme come nelle versioni fino alla 0.5, un film e un voto alla stagione (che nel diario non c'è).
+			episode('e3', '2026-11-23', [{ s: 1, e: 3 }], { place: 'Divano' }),
 			{ id: 'f', movieId: film.id, date: '2026-11-23', movie: film, notes: '', rating: null },
-			episode('old', '2026-11-23', [{ s: 1, e: 1 }, { s: 1, e: 2 }]),
-			// Il 22: un episodio solo resta una card normale.
+			episode('old', '2026-11-23', [{ s: 1, e: 1 }, { s: 1, e: 2 }], { place: 'Divano' }),
+			{ id: 'v', movieId: dark.id, date: '2026-11-23', scope: 'season', season: 1, episodes: [], movie: dark, notes: '', rating: 8 },
+			// Il 22: un episodio solo, anche lui in una riga del giorno.
 			episode('e4', '2026-11-22', [{ s: 1, e: 4 }])
 		]
 	};
-	const html = makeViews(data).renderDiaryRows();
-	const groups = [...html.matchAll(/<details class="diary-episodes" data-diary-group="([^"]+)"/g)].map(match => match[1]);
-	assert.deepEqual(groups, ['2026-11-23|tt5753856|1'], 'un solo gruppo, il 23');
-	// Gli episodi a capo sotto il titolo; la media delle spipe degli episodi votati (qui solo E3, 8).
-	assert.match(html, /Dark \(2017\)<\/h3>\s*<p class="diary-episodes-label">S1·E1–E3<\/p>\s*<p class="diary-meta">3 episodi/);
-	assert.match(html, /aria-label="8 spipe su 10"[\s\S]*<span class="diary-average">media di 1 episodio<\/span>/);
-	// Occhio per leggere la visione solo dove è di un episodio solo (e sulle righe dei film).
-	assert.match(html, /class="icon-button small viewing-read" data-viewing-id="e3"/);
-	assert.match(html, /class="icon-button small viewing-read" data-viewing-id="f"/);
-	assert.doesNotMatch(html, /viewing-read" data-viewing-id="old"/);
 	const views = makeViews(data);
-	const summary = views.renderViewingSummary({ ...data.viewings[0], label: 'S1·E3', place: 'Divano' });
-	assert.match(summary, /il 2026-11-23 · Divano/);
-	assert.match(summary, /<div class="review-content viewing-summary-notes"><p>Che finale<\/p><\/div>/);
-	assert.match(summary, /class="icon-button viewing-summary-edit" data-viewing-id="e3"/);
-	// Il modulo di un episodio nuovo prende data, dove e con chi da quello già compilato; voto e note no.
-	const form = views.renderViewingForm({ movie: dark, scope: 'episodes', episode: { s: 1, e: 5 }, prefill: { date: '2026-11-20', place: 'Divano', withWhom: 'gli amici' } });
-	assert.match(form, /name="date" type="date" required value="2026-11-20"/);
+	const html = views.renderDiaryRows();
+	const days = [...html.matchAll(/class="icon-button small diary-day-edit" data-movie-id="tt5753856" data-date="([^"]+)"/g)].map(match => match[1]);
+	assert.deepEqual(days, ['2026-11-23', '2026-11-22']);
+	assert.match(html, /Dark \(2017\)<\/h3>\s*<p class="diary-episodes-label" title="S1·E1–E3">S1 · E1–E3<\/p>\s*<p class="diary-meta">3 episodi · Divano<\/p>/);
+	assert.match(html, /<p class="diary-episodes-label" title="S1·E4">S1 · E4<\/p>\s*<p class="diary-meta">1 episodio<\/p>/);
+	assert.doesNotMatch(html, /data-viewing-id="v"|data-viewing-id="e3"/, 'niente voti alle stagioni e niente card per episodio');
+	assert.match(html, /viewing-edit" data-viewing-id="f"/, 'il film resta una card normale');
+	// Il giorno: gli episodi, poi data, dove e con chi per tutti; niente voto né note.
+	const form = views.renderEpisodeDayForm({ movie: dark, date: '2026-11-23', viewings: data.viewings.filter(viewing => viewing.scope === 'episodes' && viewing.date === '2026-11-23') });
+	assert.deepEqual([...form.matchAll(/<li>([^<]+)<\/li>/g)].map(match => match[1]), ['S1·E1 «Segreti»', 'S1·E2 «Bugie»', 'S1·E3 «Passato e presente»']);
+	assert.match(form, /data-episode-day-form data-movie-id="tt5753856" data-date="2026-11-23"/);
 	assert.match(form, /name="place" type="text" maxlength="120" value="Divano"/);
-	assert.match(form, /name="withWhom" type="text" maxlength="120" value="gli amici"/);
-	assert.match(form, /<input type="hidden" name="rating" value="">/);
-	assert.match(readFileSync(new URL('../www/assets/js/diary.js', import.meta.url), 'utf8'), /item\.scope === 'episodes' && item\.id !== excludeId && \(item\.place \|\| item\.withWhom\)/);
-	// Dentro: una card per episodio, in ordine; voto e nota solo per la visione di un episodio solo.
-	const cards = [...html.matchAll(/<p class="diary-episode-title">([^<]+)<\/p>/g)].map(match => match[1]);
-	assert.deepEqual(cards, ['S1·E1 «Segreti»', 'S1·E2 «Bugie»', 'S1·E3 «Passato e presente»']);
-	assert.match(html, /class="icon-button small diary-episode-edit" data-movie-id="tt5753856" data-episode="1-2"/);
-	assert.match(html, /class="icon-button small viewing-edit" data-viewing-id="e3"/);
-	assert.match(html, /Che finale/);
-	// Il film dello stesso giorno e l'episodio da solo del 22 restano card normali.
-	assert.match(html, /viewing-edit" data-viewing-id="f"/);
-	assert.match(html, /viewing-edit" data-viewing-id="e4"/);
-	assert.equal((html.match(/class="diary-episode"/g) || []).length, 3);
+	assert.doesNotMatch(form, /name="rating"|data-review-editor/);
+	assert.match(form, /Togli dal diario questi 3 episodi/);
+	const summary = views.renderViewingSummary({ ...data.viewings[1], label: '', place: 'Cinema', notes: '<p>Che finale</p>' });
+	assert.match(summary, /il 2026-11-23 · Cinema/);
 });
 
 test('writes "Da solo" without "con" in the diary', () => {

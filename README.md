@@ -32,10 +32,10 @@ myCimmena è un'app per Android, gratuita. Nasce dal sito del [Club del Cimmena]
 - Importi diario e voti da Letterboxd o IMDb.
 
 **Serie TV**
-- Segni gli episodi uno per uno, o una stagione intera in una data: ogni episodio ha la sua data, il suo voto e le sue note.
-- Nel diario gli episodi visti lo stesso giorno stanno insieme in una card che si apre.
+- Un tocco su un episodio lo segna visto (o toglie il segno); tenendolo premuto segni anche quelli prima. La data è una sola, in cima: oggi, o il giorno che scegli.
+- Voti la stagione e la serie con i gatti, direttamente nella scheda; una nota sulla serie raccoglie tutti i tuoi commenti, anche ai singoli episodi.
+- Nel diario gli episodi visti lo stesso giorno stanno in una riga sola; con la matita cambi data, dove e con chi per tutti.
 - In "Stai guardando" vedi a che punto sei e il prossimo episodio, con un tocco lo segni come visto.
-- A fine stagione e a fine serie l'app ti propone il voto; puoi ricominciare una serie da capo.
 
 **Schede light o complete**
 - *Light*: funziona subito, con i dati di IMDb.

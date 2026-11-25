@@ -1,20 +1,16 @@
 // Diario (PIANO.md, §6): ricerca nella lista e dialog per segnare una visione, modificarla o eliminarla.
 // Le visioni si salvano con store.js; voto (slider dei gatti) e note usano l'editor delle recensioni del sito.
-import { viewingLabel } from './app-data.js';
 import { hydrateIcons } from './icons.js';
 import { showErrorToast, showToast } from './toasts.js';
 import { applyReviewFormat, handleRatingKeydown, handleRatingPointerDown, handleReviewInput, reviewTextLength, updateReviewCounter, updateReviewRating } from './review-editor.js';
 
-// onEpisodeSaved(movieId, before, episodes): dopo la visione nuova di un episodio, per proporre il voto alla stagione o
-// alla serie appena finite (series-ui.js).
-export function createDiary({ app, store, getData, viewRenderer, askConfirmation, refresh, onEpisodeSaved = async () => {} }) {
+// Gli episodi delle serie non hanno un modulo loro: un giorno di episodi si apre con openEpisodeDay (data, dove, con chi).
+export function createDiary({ app, store, getData, viewRenderer, askConfirmation, refresh }) {
 	const dialog = document.getElementById('viewing-dialog');
 	const dialogTitle = document.getElementById('viewing-dialog-title');
 	const dialogBody = document.getElementById('viewing-dialog-body');
 	const dialogClose = document.getElementById('viewing-dialog-close');
 	let diaryQuery = '';
-	// Gruppi di episodi aperti (views.js, episodeGroupRow): restano aperti quando la lista si ridisegna.
-	const openGroups = new Set();
 	let initialSnapshot = '';
 	let scrollPosition = null;
 
@@ -24,44 +20,86 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		|| null;
 	const form = () => dialogBody.querySelector('[data-viewing-form]');
 	const snapshot = target => (target ? JSON.stringify([...new FormData(target).entries(), target.querySelector('[data-review-editor]')?.innerHTML || '']) : '');
-	const isDirty = () => Boolean(form()) && snapshot(form()) !== initialSnapshot;
+	const dayForm = () => dialogBody.querySelector('[data-episode-day-form]');
+	const isDirty = () => Boolean(form() || dayForm()) && snapshot(form() || dayForm()) !== initialSnapshot;
 
-	// `movieId` per una visione nuova, `viewingId` per modificarne una esistente. Per le serie `scope` 'season' (con
-	// `season`) o 'series' apre il voto a una stagione o a tutta la serie; 'episodes' (con `episode`) la visione di un episodio.
-	function openViewingForm({ movieId = null, viewingId = null, scope = null, season = null, episode = null }) {
+	// `movieId` per una visione nuova, `viewingId` per modificarne una esistente.
+	function openViewingForm({ movieId = null, viewingId = null }) {
 		const viewing = viewingId ? getData().viewings.find(item => item.id === viewingId) : null;
 		const movie = viewing?.movie || findMovie(movieId);
 		if (!movie) {
 			showErrorToast('Questo titolo non è più tra quelli salvati.');
 			return;
 		}
+		// Episodi delle serie: si apre il loro giorno.
+		if (viewing?.scope === 'episodes') return void openEpisodeDay({ movieId: viewing.movieId, date: viewing.date });
 		const inWatchlist = getData().movies.some(item => item.id === movie.id);
-		dialogTitle.textContent = viewing ? 'Modifica la visione' : scope && scope !== 'episodes' ? 'Il tuo voto' : 'Segna come visto';
-		// Episodi: dove, con chi e (per uno nuovo) la data vengono dall'ultimo episodio della serie compilato a mano.
-		const isEpisode = viewing ? viewing.scope === 'episodes' : scope === 'episodes';
-		const prefill = isEpisode ? episodePrefill(movie.id, viewing?.id) : null;
-		dialogBody.innerHTML = viewRenderer.renderViewingForm({ movie, viewing, inWatchlist, scope, season, episode, prefill });
+		dialogTitle.textContent = viewing ? 'Modifica la visione' : 'Segna come visto';
+		dialogBody.innerHTML = viewRenderer.renderViewingForm({ movie, viewing, inWatchlist });
 		hydrateIcons(dialogBody);
 		const target = form();
 		updateReviewRating(target);
 		updateReviewCounter(target);
 		syncClearRating(target);
 		initialSnapshot = snapshot(target);
-		if (!dialog.open) {
-			scrollPosition = { left: window.scrollX, top: window.scrollY };
-			document.body.classList.add('modal-open');
-			dialog.showModal();
-		}
+		showDialog();
 		dialog.classList.remove('reading');
 		scrollToFirstEmpty(target);
 	}
 
-	// L'ultimo episodio della stessa serie con "Dove" o "Con chi" compilati: voto e nota no, restano di ciascuno.
-	function episodePrefill(movieId, excludeId = null) {
-		const reference = (getData().viewings || [])
-			.filter(item => item.movieId === movieId && item.scope === 'episodes' && item.id !== excludeId && (item.place || item.withWhom))
-			.sort((first, second) => String(second.updatedAt || '').localeCompare(String(first.updatedAt || '')))[0];
-		return reference ? { date: reference.date, place: reference.place || '', withWhom: reference.withWhom || '' } : null;
+	function showDialog() {
+		if (dialog.open) return;
+		scrollPosition = { left: window.scrollX, top: window.scrollY };
+		document.body.classList.add('modal-open');
+		dialog.showModal();
+	}
+
+	// Un giorno di episodi di una serie: data, dove e con chi per tutti, o toglierli dal diario.
+	function openEpisodeDay({ movieId, date }) {
+		const movie = findMovie(movieId);
+		const viewings = (getData().viewings || []).filter(item => item.movieId === movieId && item.scope === 'episodes' && item.date === date);
+		if (!movie || !viewings.length) return;
+		dialogTitle.textContent = 'Il giorno';
+		dialog.classList.remove('reading');
+		dialogBody.innerHTML = viewRenderer.renderEpisodeDayForm({ movie, date, viewings });
+		hydrateIcons(dialogBody);
+		initialSnapshot = snapshot(dayForm());
+		showDialog();
+		document.activeElement?.blur?.();
+		dialog.scrollTop = 0;
+	}
+
+	async function saveEpisodeDay(target) {
+		const data = new FormData(target);
+		const submit = target.querySelector('button[type="submit"]');
+		submit.disabled = true;
+		try {
+			await store.updateEpisodeDay(target.dataset.movieId, target.dataset.date, {
+				date: String(data.get('date') || ''),
+				place: String(data.get('place') || ''),
+				withWhom: String(data.get('withWhom') || '')
+			});
+			await closeDialog({ confirm: false });
+			showToast('viewingUpdated');
+			await refresh();
+		} catch (error) {
+			showErrorToast(error);
+			submit.disabled = false;
+		}
+	}
+
+	async function deleteEpisodeDay(target) {
+		const viewings = (getData().viewings || []).filter(item => item.movieId === target.dataset.movieId && item.scope === 'episodes' && item.date === target.dataset.date);
+		if (!(await askConfirmation('Togliere dal diario gli episodi di questo giorno? Tornano da vedere.'))) return;
+		try {
+			for (const viewing of viewings) await store.deleteViewing(viewing.id);
+			if (getData().seriesOf(target.dataset.movieId)?.status === 'finished') await store.setSeriesStatus(target.dataset.movieId, 'watching');
+			await closeDialog({ confirm: false });
+			showToast('viewingDeleted');
+			await refresh();
+		} catch (error) {
+			showErrorToast(error);
+		}
 	}
 
 	// Una visione in sola lettura: data, dove, voto e note per intero. La matita passa al modulo, nella stessa finestra.
@@ -123,33 +161,21 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 			place: String(data.get('place') || ''),
 			withWhom: String(data.get('withWhom') || ''),
 			rating: String(data.get('rating') || ''),
-			notes: editor.innerHTML,
-			...(target.dataset.scope ? { scope: target.dataset.scope, season: target.dataset.season ? Number(target.dataset.season) : null } : {})
+			notes: editor.innerHTML
 		};
-		const episodes = target.dataset.episode ? [target.dataset.episode.split('-').map(Number)].map(([s, e]) => ({ s, e })) : [];
-		if (episodes.length) input.episodes = episodes;
-		const before = episodes.length ? getData().seriesOf(input.movieId) : null;
 		const submit = target.querySelector('button[type="submit"]');
 		submit.disabled = true;
 		try {
-			// Voto a una stagione: vale anche per i suoi episodi senza un voto loro (store.applySeasonRating).
-			const existing = target.dataset.viewingId ? getData().viewings.find(item => item.id === target.dataset.viewingId) : null;
-			const seasonVote = existing?.scope === 'season' ? existing.season : input.scope === 'season' ? input.season : null;
 			if (target.dataset.viewingId) {
 				await store.updateViewing(target.dataset.viewingId, input);
 				showToast('viewingUpdated');
 			} else {
 				const removeFromWatchlist = data.get('removeFromWatchlist') === 'on';
-				if (input.scope) input.round = getData().seriesOf?.(input.movieId)?.round || 1;
 				await store.addViewing(input, { removeFromWatchlist });
-				if (episodes.length) showToast('episodesMarked', { label: viewingLabel({ scope: 'episodes', episodes }, before.seasons) });
-				else if (input.scope) showToast('seriesRated');
-				else showToast('viewingSaved', { removed: removeFromWatchlist });
+				showToast('viewingSaved', { removed: removeFromWatchlist });
 			}
-			if (seasonVote) await store.applySeasonRating(input.movieId, seasonVote, input.rating || null);
 			await closeDialog({ confirm: false });
 			await refresh();
-			if (episodes.length) await onEpisodeSaved(input.movieId, before, episodes);
 		} catch (error) {
 			showErrorToast(error);
 			submit.disabled = false;
@@ -160,10 +186,7 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		const question = target.querySelector('.viewing-delete')?.dataset.confirm || 'Eliminare questa visione dal diario?';
 		if (!(await askConfirmation(question))) return;
 		try {
-			const removed = getData().viewings.find(item => item.id === target.dataset.viewingId);
 			await store.deleteViewing(target.dataset.viewingId);
-			// Senza il voto alla stagione, gli episodi che l'avevano preso da lì tornano senza voto.
-			if (removed?.scope === 'season') await store.applySeasonRating(removed.movieId, removed.season, null);
 			await closeDialog({ confirm: false });
 			showToast('viewingDeleted');
 			await refresh();
@@ -173,6 +196,11 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 	}
 
 	dialog.addEventListener('submit', event => {
+		const day = event.target.closest('[data-episode-day-form]');
+		if (day) {
+			event.preventDefault();
+			return void saveEpisodeDay(day);
+		}
 		const target = event.target.closest('[data-viewing-form]');
 		if (!target) return;
 		event.preventDefault();
@@ -183,6 +211,7 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		const target = form();
 		const summaryEdit = event.target.closest('.viewing-summary-edit');
 		if (summaryEdit) return void openViewingForm({ viewingId: summaryEdit.dataset.viewingId });
+		if (event.target.closest('.episode-day-delete')) return void deleteEpisodeDay(dayForm());
 		if (event.target.closest('.viewing-cancel')) closeDialog();
 		else if (event.target.closest('.viewing-delete')) deleteViewing(target);
 		else if (event.target.closest('.viewing-clear-rating')) {
@@ -236,31 +265,9 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		if (edit) openViewingForm({ viewingId: edit.dataset.viewingId });
 		const read = event.target.closest('.viewing-read');
 		if (read) openViewingRead(read.dataset.viewingId);
-		const episode = event.target.closest('.diary-episode-edit');
-		if (episode) openOldEpisode(episode.dataset.movieId, episode.dataset.episode);
+		const day = event.target.closest('.diary-day-edit');
+		if (day) openEpisodeDay({ movieId: day.dataset.movieId, date: day.dataset.date });
 	});
-	// Il tocco sulla locandina dentro l'intestazione del gruppo apre la scheda, senza aprire o chiudere il gruppo.
-	app.addEventListener('click', event => {
-		if (event.target.closest('.diary-episodes > summary .movie-poster-trigger')) event.preventDefault();
-	});
-	app.addEventListener('toggle', event => {
-		const group = event.target.closest?.('[data-diary-group]');
-		if (!group) return;
-		if (group.open) openGroups.add(group.dataset.diaryGroup);
-		else openGroups.delete(group.dataset.diaryGroup);
-	}, true);
-
-	// Episodio dentro una visione di più episodi (fino alla 0.5): diventa una visione sua, poi si apre.
-	async function openOldEpisode(movieId, key) {
-		const [s, e] = String(key).split('-').map(Number);
-		try {
-			const viewingId = await store.splitEpisode(movieId, { s, e });
-			await refresh();
-			if (viewingId) openViewingForm({ viewingId });
-		} catch (error) {
-			showErrorToast(error);
-		}
-	}
 
 	function bind() {
 		document.getElementById('diary-search-form')?.addEventListener('submit', event => event.preventDefault());
@@ -270,5 +277,5 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		});
 	}
 
-	return { openViewingRead, getDiaryQuery: () => diaryQuery, getDiaryOpenGroups: () => openGroups, openViewingForm, updateDiaryRows, bind };
+	return { openViewingRead, getDiaryQuery: () => diaryQuery, openViewingForm, openEpisodeDay, updateDiaryRows, bind };
 }

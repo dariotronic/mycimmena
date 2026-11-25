@@ -218,7 +218,8 @@ export function createMovieInfo({ app, openImageLightbox, getData = () => ({ mov
 		const inWatchlist = Boolean(watchlistMovie(movie.id));
 		const seen = (getData().viewings || []).some(viewing => viewing.movieId === movie.id);
 		const buttons = [];
-		if (inWatchlist || seen) buttons.push(`<button class="button secondary mark-seen" data-movie-id="${escapeHtml(movie.id)}" type="button">${icon('task_alt')}<span>${seen ? 'Segna come visto di nuovo' : 'Segna come visto'}</span></button>`);
+		// Le serie si segnano episodio per episodio, nella sezione Episodi (series-ui.js).
+		if ((inWatchlist || seen) && contentType(movie) !== 'series') buttons.push(`<button class="button secondary mark-seen" data-movie-id="${escapeHtml(movie.id)}" type="button">${icon('task_alt')}<span>${seen ? 'Segna come visto di nuovo' : 'Segna come visto'}</span></button>`);
 		if (inWatchlist) {
 			buttons.push(isScheduled(movie.id)
 				? `<p class="movie-info-scheduled">${icon('movie')}<span>Nella prossima serata</span></p>`

@@ -9,6 +9,7 @@ import { soundEnabled } from './slot-sounds.js';
 import { APP_VERSION, CREDIT_HANDLE, CREDIT_URL, REPO_URL } from './app-info.js';
 import { birthdayFields, birthdayMonthDay, COMPANY, diaryDefaults, flavourLine, isBirthday, LANGUAGES, PLACES, POPCORN, SPECTATORS } from './profile.js';
 import { renderWatchingRow } from './series-ui.js';
+import { episodesSummary, formatEpisodes } from './series.js';
 import { renderMoviePicker } from './movie-picker.js';
 import { IMPORT_SOURCES } from './watchlist-import.js';
 
@@ -31,7 +32,6 @@ export function createViews(context) {
 		getData,
 		getDiaryQuery = () => '',
 		// Gruppi di episodi aperti nel diario (date|serie|giro), per tenerli aperti quando la lista si ridisegna.
-		getDiaryOpenGroups = () => new Set(),
 		// Esito dell'ultimo ripristino di un backup dalle Impostazioni ({ mode, text }), o null.
 		getRestoreNotice = () => null,
 		getColorMode = () => 'day',
@@ -301,7 +301,8 @@ export function createViews(context) {
 
 	function renderDiaryRows() {
 		const query = getDiaryQuery().trim().toLocaleLowerCase('it');
-		const viewings = (getData().viewings || []).filter(viewing => !query || String(viewing.movie.title || '').toLocaleLowerCase('it').includes(query));
+		// I voti a stagioni e serie stanno nella scheda della serie, non nel diario: qui solo quello che si è visto.
+		const viewings = (getData().viewings || []).filter(viewing => (!viewing.scope || viewing.scope === 'episodes') && (!query || String(viewing.movie.title || '').toLocaleLowerCase('it').includes(query)));
 		if (!viewings.length) return emptyState('Nessuna visione con questo titolo.');
 		const days = [];
 		viewings.forEach(viewing => {
@@ -312,13 +313,13 @@ export function createViews(context) {
 		return days.map(day => `
 			<article class="archive-entry">
 				<h2 class="archive-date"><time datetime="${escapeHtml(day.date)}">${escapeHtml(formatDate(day.date))}</time></h2>
-				<div class="archive-films">${groupEpisodes(day.items).map(entry => (Array.isArray(entry) ? episodeGroupRow(day.date, entry) : diaryRow(entry))).join('')}</div>
+				<div class="archive-films">${groupEpisodes(day.items).map(entry => (Array.isArray(entry) ? episodeDayRow(day.date, entry) : diaryRow(entry))).join('')}</div>
 			</article>
 		`).join('');
 	}
 
-	// Nello stesso giorno gli episodi di una serie (stesso giro) stanno in un gruppo, al posto della prima visione;
-	// un episodio solo resta una card normale. Il resto non cambia ordine.
+	// Nello stesso giorno gli episodi di una serie stanno in una riga sola, al posto della prima visione. Il resto non
+	// cambia ordine.
 	function groupEpisodes(items) {
 		const groups = new Map();
 		const entries = [];
@@ -327,68 +328,77 @@ export function createViews(context) {
 				entries.push(viewing);
 				continue;
 			}
-			const key = `${viewing.movieId}|${viewing.round || 1}`;
-			if (!groups.has(key)) {
-				groups.set(key, []);
-				entries.push(groups.get(key));
+			if (!groups.has(viewing.movieId)) {
+				groups.set(viewing.movieId, []);
+				entries.push(groups.get(viewing.movieId));
 			}
-			groups.get(key).push(viewing);
+			groups.get(viewing.movieId).push(viewing);
 		}
-		return entries.map(entry => (Array.isArray(entry) && entry.length === 1 && (entry[0].episodes || []).length <= 1 ? entry[0] : entry));
+		return entries;
 	}
 
-	// Card del gruppo di episodi: la freccia apre l'elenco, con una card per episodio (voto, nota, matita).
-	function episodeGroupRow(date, viewings) {
+	// Un giorno di episodi di una serie: quali, quanti, dove e con chi. La matita apre il giorno (diary.js): data, dove
+	// e con chi per tutti, o toglierli dal diario. Voti e note sono della stagione e della serie, nella scheda.
+	function episodeDayRow(date, viewings) {
 		const movie = viewings[0].movie;
-		const items = viewings.flatMap(viewing => (viewing.episodes || []).map(episode => ({ viewing, episode })))
-			.sort((first, second) => first.episode.s - second.episode.s || first.episode.e - second.episode.e);
-		const label = viewingLabel({ scope: 'episodes', episodes: items.map(item => item.episode) }, movie.seasons);
+		const episodes = viewings.flatMap(viewing => viewing.episodes || []);
 		const metas = [...new Set(viewings.map(viewingMeta).filter(Boolean))];
-		const key = `${date}|${movie.id}|${viewings[0].round || 1}`;
-		// Media delle spipe degli episodi che hanno un voto loro (arrotondata alla mezza spipa).
-		const rated = viewings.filter(viewing => (viewing.episodes || []).length === 1 && viewing.rating);
-		const average = rated.length ? Math.round((rated.reduce((sum, viewing) => sum + Number(viewing.rating), 0) / rated.length) * 2) / 2 : null;
+		const count = episodes.length === 1 ? '1 episodio' : `${episodes.length} episodi`;
 		return `
-			<details class="diary-episodes" data-diary-group="${escapeHtml(key)}"${getDiaryOpenGroups().has(key) ? ' open' : ''}>
-				<summary class="archive-film-row diary-row">
-					${moviePosterButton(movie, 'archive-film-poster')}
-					<div class="archive-film-copy">
-						<h3 class="archive-film-title">${escapeHtml(movieName(movie))}</h3>
-						<p class="diary-episodes-label">${escapeHtml(label)}</p>
-						<p class="diary-meta">${items.length} episodi${metas.length === 1 ? ` · ${escapeHtml(metas[0])}` : ''}</p>
-						${average ? `<div class="review-summary">${ratingSummary(average)}<span class="diary-average">media di ${rated.length === 1 ? '1 episodio' : `${rated.length} episodi`}</span></div>` : ''}
-					</div>
-					<div class="archive-film-actions">
-						<span class="diary-episodes-toggle" aria-hidden="true">${icon('expand_more')}</span>
-						<span class="visually-hidden">Mostra o nascondi gli episodi</span>
-					</div>
-				</summary>
-				<div class="diary-episode-list">${items.map(({ viewing, episode }) => episodeCard(viewing, episode, movie)).join('')}</div>
-			</details>
+			<article class="archive-film-row diary-row diary-episodes-row">
+				${moviePosterButton(movie, 'archive-film-poster')}
+				<div class="archive-film-copy">
+					<h3 class="archive-film-title">${escapeHtml(movieName(movie))}</h3>
+					<p class="diary-episodes-label" title="${escapeHtml(formatEpisodes(episodes, movie.seasons))}">${escapeHtml(episodesSummary(episodes))}</p>
+					<p class="diary-meta">${escapeHtml(count)}${metas.length === 1 ? ` · ${escapeHtml(metas[0])}` : ''}</p>
+				</div>
+				<div class="archive-film-actions">
+					${infoButton(movie)}
+					<button class="icon-button small diary-day-edit" data-movie-id="${escapeHtml(movie.id)}" data-date="${escapeHtml(date)}" type="button" aria-label="Modifica gli episodi di ${escapeHtml(movie.title)} del ${escapeHtml(formatDate(date))}" title="Modifica">${icon('edit')}</button>
+				</div>
+			</article>
 		`;
 	}
 
-	// Un episodio del gruppo. Voto e nota sono suoi solo se la visione è di quell'episodio soltanto: quelle di più
-	// episodi insieme (fino alla 0.5) si separano quando si tocca la matita (diary.js, store.splitEpisode).
-	function episodeCard(viewing, episode, movie) {
-		const own = (viewing.episodes || []).length === 1;
-		const name = viewingLabel({ scope: 'episodes', episodes: [episode] }, movie.seasons);
-		const notes = own ? sanitizeNotes(viewing.notes).text.replace(/\s+/g, ' ').trim() : '';
-		const edit = own
-			? `class="icon-button small viewing-edit" data-viewing-id="${escapeHtml(viewing.id)}"`
-			: `class="icon-button small diary-episode-edit" data-movie-id="${escapeHtml(movie.id)}" data-episode="${episode.s}-${episode.e}"`;
+	// Un giorno di episodi di una serie (dal diario o dal diario della serie, diary.js): data, dove e con chi valgono
+	// per tutti gli episodi di quel giorno.
+	function renderEpisodeDayForm({ movie, date, viewings }) {
+		const episodes = viewings.flatMap(viewing => viewing.episodes || []).sort((first, second) => first.s - second.s || first.e - second.e);
+		const place = viewings.find(viewing => viewing.place)?.place || '';
+		const withWhom = viewings.find(viewing => viewing.withWhom)?.withWhom || '';
+		const list = episodes.map(episode => {
+			const label = viewingLabel({ scope: 'episodes', episodes: [episode] }, movie.seasons);
+			return `<li>${escapeHtml(label)}</li>`;
+		}).join('');
+		const count = episodes.length === 1 ? 'questo episodio' : `questi ${episodes.length} episodi`;
 		return `
-			<article class="diary-episode">
-				<div class="diary-episode-copy">
-					<p class="diary-episode-title">${escapeHtml(name)}</p>
-					<div class="review-summary">${ratingSummary(own ? viewing.rating : null)}</div>
-					${notes ? `<p class="review-content diary-notes">${escapeHtml(notes)}</p>` : ''}
+			<form class="review-form viewing-form episode-day-form" data-episode-day-form data-movie-id="${escapeHtml(movie.id)}" data-date="${escapeHtml(date)}" novalidate>
+				<p class="viewing-form-title">${escapeHtml(movieName(movie))} <span class="diary-label">· ${escapeHtml(formatDate(date))}</span></p>
+				<ul class="episode-day-list">${list}</ul>
+				<div class="form-grid">
+					<div class="field">
+						<label for="episode-day-date">Data</label>
+						<input id="episode-day-date" name="date" type="date" required value="${escapeHtml(date)}" max="${escapeHtml(today())}">
+					</div>
+					<div class="field">
+						<label for="episode-day-place">Dove <span>(facoltativo)</span></label>
+						<input id="episode-day-place" name="place" type="text" maxlength="120" value="${escapeHtml(place)}" placeholder="Divano, cinema…">
+					</div>
+					<div class="field full">
+						<label for="episode-day-with">Con chi <span>(facoltativo)</span></label>
+						<input id="episode-day-with" name="withWhom" type="text" maxlength="120" value="${escapeHtml(withWhom)}">
+					</div>
 				</div>
-				<div class="diary-episode-actions">
-					${own ? readButton(viewing, `${name} di ${movie.title}`) : ''}
-					<button ${edit} type="button" aria-label="Modifica ${escapeHtml(name)} di ${escapeHtml(movie.title)}" title="Modifica">${icon('edit')}</button>
+				<p class="help-text">Voti e note della serie stanno nella sua scheda: il voto alle stagioni, alla serie e la nota.</p>
+				<div class="button-row review-form-actions">
+					<button class="button icon-button-wide" type="submit" aria-label="Salva" title="Salva">${icon('save')}</button>
+					<button class="button secondary icon-button-wide viewing-cancel" type="button" aria-label="Annulla" title="Annulla">${icon('close')}</button>
 				</div>
-			</article>
+				<div class="viewing-delete-zone">
+					<button class="text-button episode-day-delete" type="button">${icon('delete')}<span>Togli dal diario ${escapeHtml(count)}</span></button>
+					<p class="help-text">Tornano da vedere.</p>
+				</div>
+			</form>
 		`;
 	}
 
@@ -455,7 +465,8 @@ export function createViews(context) {
 		// "Segna come visto" sta sotto l'Hypometro, con "Aggiungi alla prossima serata" (movie-info.js).
 		if (!list.length) return '';
 		const rounded = average === null ? null : Math.round(average * 2) / 2;
-		if (contentType(movie) === 'series') return renderSeriesVotes(movie, list);
+		// Le serie hanno tutto nella sezione Episodi (series-ui.js): voti, nota e diario della serie.
+		if (contentType(movie) === 'series') return '';
 		const summary = ratedCount > 1
 			? `<p class="my-viewings-average">Media ${escapeHtml(formatSpipe(rounded))} · ${list.length} visioni</p>`
 			: list.length > 1 ? `<p class="my-viewings-average">${list.length} visioni</p>` : '';
@@ -485,91 +496,17 @@ export function createViews(context) {
 		`;
 	}
 
-	// "I miei voti" di una serie (PIANO.md, §7): voto complessivo, una riga per stagione (il voto della stagione o la
-	// media delle sessioni), poi le sessioni per data.
-	function renderSeriesVotes(movie, list) {
-		const seriesVotes = list.filter(viewing => viewing.scope === 'series');
-		const seasonVotes = list.filter(viewing => viewing.scope === 'season');
-		const sessions = list.filter(viewing => viewing.scope !== 'series' && viewing.scope !== 'season');
-		const seasonNumbers = [...new Set([...seasonVotes.map(viewing => viewing.season), ...sessions.flatMap(viewing => (viewing.episodes || []).map(episode => episode.s))])].sort((first, second) => first - second);
-		const average = items => {
-			const rated = items.filter(viewing => viewing.rating);
-			return rated.length ? Math.round((rated.reduce((sum, viewing) => sum + Number(viewing.rating), 0) / rated.length) * 2) / 2 : null;
-		};
-		const seasonRows = seasonNumbers.map(n => {
-			const own = seasonVotes.find(viewing => viewing.season === n && viewing.rating);
-			const value = own ? Number(own.rating) : average(sessions.filter(viewing => (viewing.episodes || []).some(episode => episode.s === n)));
-			return value ? `<li class="series-vote-row"><span>Stagione ${n}</span><span>${escapeHtml(formatSpipe(value))}${own ? '' : ' <small>(media delle sessioni)</small>'}</span></li>` : '';
-		}).join('');
-		const overall = seriesVotes.find(viewing => viewing.rating);
-		return `
-			<h3 id="movie-info-viewings-title" class="movie-vote-title">I miei voti</h3>
-			${overall ? `<p class="my-viewings-average">Serie: ${escapeHtml(formatSpipe(Number(overall.rating)))}</p>` : ''}
-			${seasonRows ? `<ul class="series-votes">${seasonRows}</ul>` : ''}
-			<ul class="my-viewings">${groupSeriesViewings(list).map(entry => (Array.isArray(entry) ? episodeDayGroup(movie, entry) : myViewingItem(entry, entry.label))).join('')}</ul>
-		`;
-	}
-
-	// Gli episodi dello stesso giorno e della stessa stagione stanno insieme (un gruppo solo se sono più di uno);
-	// voti a stagioni e serie restano a sé. L'ordine resta quello della lista (dalla visione più recente).
-	function groupSeriesViewings(list) {
-		const groups = new Map();
-		const entries = [];
-		for (const viewing of list) {
-			if (viewing.scope !== 'episodes' || !(viewing.episodes || []).length) {
-				entries.push(viewing);
-				continue;
-			}
-			const key = `${viewing.date}|${viewing.episodes[0].s}`;
-			if (!groups.has(key)) {
-				groups.set(key, []);
-				entries.push(groups.get(key));
-			}
-			groups.get(key).push(viewing);
-		}
-		return entries.map(entry => (Array.isArray(entry) && entry.length === 1 ? entry[0] : entry));
-	}
-
-	function episodeDayGroup(movie, viewings) {
-		const episodes = viewings.flatMap(viewing => viewing.episodes || []);
-		const label = viewingLabel({ scope: 'episodes', episodes }, movie.seasons);
-		const rated = viewings.filter(viewing => viewing.rating);
-		const average = rated.length ? Math.round((rated.reduce((sum, viewing) => sum + Number(viewing.rating), 0) / rated.length) * 2) / 2 : null;
-		const sorted = [...viewings].sort((first, second) => first.episodes[0].e - second.episodes[0].e);
-		return `
-			<li class="my-viewing-group">
-				<details>
-					<summary>
-						<span class="my-viewing-group-copy">
-							<span class="my-viewing-date">${escapeHtml(formatDate(viewings[0].date))} · ${escapeHtml(label)}</span>
-							<span class="diary-meta">${episodes.length} episodi${average ? ` · media ${escapeHtml(formatSpipe(average))}` : ''}</span>
-						</span>
-						<span class="diary-episodes-toggle" aria-hidden="true">${icon('expand_more')}</span>
-					</summary>
-					<ul class="my-viewings">${sorted.map(viewing => myViewingItem(viewing, viewing.label)).join('')}</ul>
-				</details>
-			</li>
-		`;
-	}
-
 	// Modulo della visione (nuova o da modificare) nel dialog del diario. Lo slider dei gatti e l'editor delle note sono
-	// quelli delle recensioni del sito (review-editor.js), con il voto facoltativo.
-	// `scope` e `season` per il voto a una stagione o a tutta la serie; una visione nuova propone "Dove" e "Con chi"
-	// dalle risposte dell'onboarding.
-	// `episode` ({ s, e }) con scope 'episodes': la visione di un episodio nuovo (dalla sezione Episodi della scheda).
-	// `prefill` ({ date, place, withWhom }): per gli episodi, i dati dell'ultimo episodio della serie compilato a mano
-	// (diary.js); riempiono i campi vuoti, e la data solo per un episodio nuovo.
-	function renderViewingForm({ movie, viewing = null, inWatchlist = false, scope = null, season = null, episode = null, prefill = null }) {
+	// quelli delle recensioni del sito (review-editor.js), con il voto facoltativo. Una visione nuova propone "Dove" e
+	// "Con chi" dalle risposte dell'onboarding. Gli episodi delle serie hanno il loro modulo (renderEpisodeDayForm).
+	function renderViewingForm({ movie, viewing = null, inWatchlist = false }) {
 		const rating = viewing?.rating ? Number(viewing.rating) : 0;
 		const id = viewing ? escapeHtml(viewing.id) : 'new';
-		const kind = viewing?.scope || scope;
-		// Il voto a una stagione o alla serie non è una serata: niente "Dove" e "Con chi" proposti (per un episodio sì).
-		const defaults = prefill || (viewing || (kind && kind !== 'episodes') ? {} : diaryDefaults(getData().profile));
-		const date = viewing?.date || prefill?.date || today();
-		const episodeName = episode ? viewingLabel({ scope: 'episodes', episodes: [episode] }, movie.seasons) : '';
-		const subtitle = viewing?.label || episodeName || (kind === 'season' ? `Stagione ${season}` : kind === 'series' ? 'Voto alla serie' : '');
+		const defaults = viewing ? {} : diaryDefaults(getData().profile);
+		const date = viewing?.date || today();
+		const subtitle = viewing?.label || '';
 		return `
-			<form class="review-form viewing-form" data-review-form="${escapeHtml(movie.id)}" data-viewing-form${viewing ? ` data-viewing-id="${id}"` : ''}${!viewing && kind ? ` data-scope="${escapeHtml(kind)}"${season ? ` data-season="${Number(season)}"` : ''}${episode ? ` data-episode="${Number(episode.s)}-${Number(episode.e)}"` : ''}` : ''} novalidate>
+			<form class="review-form viewing-form" data-review-form="${escapeHtml(movie.id)}" data-viewing-form${viewing ? ` data-viewing-id="${id}"` : ''} novalidate>
 				<p class="viewing-form-title">${escapeHtml(movieName(movie))}${subtitle ? ` <span class="diary-label">· ${escapeHtml(subtitle)}</span>` : ''}</p>
 				<div class="form-grid">
 					<div class="field">
@@ -596,9 +533,8 @@ export function createViews(context) {
 						<button class="text-button viewing-clear-rating" type="button"${rating ? '' : ' hidden'}>Togli il voto</button>
 					</div>
 				</fieldset>
-				${kind === 'season' ? '<p class="help-text season-vote-help">Il voto vale anche per gli episodi visti di questa stagione che non hanno un voto loro.</p>' : ''}
 				${richEditor({ label: 'Note <span>(facoltative)</span>', toolbarLabel: 'Formattazione delle note', textLabel: 'Note sulla visione', content: viewing ? sanitizeNotes(viewing.notes).html : '' })}
-				${!viewing && inWatchlist && !kind ? `
+				${!viewing && inWatchlist ? `
 					<label class="viewing-remove-watchlist">
 						<input class="switch" name="removeFromWatchlist" type="checkbox" role="switch" checked>
 						<span>Togli dalla watchlist</span>
@@ -617,11 +553,9 @@ export function createViews(context) {
 	// esattamente cosa toglie dal diario.
 	function deleteZone(viewing) {
 		const date = formatDate(viewing.date);
-		const [label, help, question] = viewing.scope === 'episodes'
-			? ['Elimina questa visione degli episodi', `Toglie dal diario la visione del ${date} con gli episodi ${viewing.label || ''}, che tornano da vedere.`, `Eliminare dal diario la visione del ${date}? Gli episodi ${viewing.label || ''} tornano da vedere.`]
-			: viewing.scope === 'season' || viewing.scope === 'series'
-				? ['Elimina questo voto', 'Toglie dal diario il voto con la sua nota.', 'Eliminare questo voto dal diario, con la sua nota?']
-				: ['Elimina questa visione dal diario', `Toglie dal diario tutta la visione del ${date}, con voto e note.`, `Eliminare dal diario la visione del ${date}, con voto e note?`];
+		const [label, help, question] = viewing.scope === 'season' || viewing.scope === 'series'
+			? ['Elimina questo voto', 'Toglie dal diario il voto con la sua nota.', 'Eliminare questo voto dal diario, con la sua nota?']
+			: ['Elimina questa visione dal diario', `Toglie dal diario tutta la visione del ${date}, con voto e note.`, `Eliminare dal diario la visione del ${date}, con voto e note?`];
 		return `
 			<div class="viewing-delete-zone">
 				<button class="text-button viewing-delete" type="button" data-confirm="${escapeHtml(question)}">${icon('delete')}<span>${escapeHtml(label)}</span></button>
@@ -1143,5 +1077,5 @@ export function createViews(context) {
 		`;
 	}
 
-	return { richEditor, minVotesLabel, renderInfo, renderWatching, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderViewingSummary, renderMeetingForm, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
+	return { richEditor, minVotesLabel, renderInfo, renderWatching, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderEpisodeDayForm, renderViewingSummary, renderMeetingForm, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
 }

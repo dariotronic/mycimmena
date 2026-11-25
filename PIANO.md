@@ -100,7 +100,7 @@ Store IndexedDB (schema versione 2, in `www/assets/js/store.js`). `profile`, `se
   - Solo per le serie: `episodes` (elenco di `{ s, e }` visti in quella sessione) e `scope` (`'episodes' | 'season' | 'series'`, cioè a cosa si riferisce il voto; §7)
   - `createdAt`, `updatedAt`
   - Un film può avere più visioni (rivisto).
-- **`series`**: avanzamento delle serie, per `movieId`: `status` (`'watching' | 'paused' | 'finished' | 'dropped'`), `round` (1 al primo giro, 2 se la si riguarda…), `startedAt`, `updatedAt`. Gli episodi visti si ricavano dalle `viewings` del giro corrente, così non ci sono due copie da tenere allineate.
+- **`series`**: avanzamento delle serie, per `movieId`: `status` (`'watching' | 'paused' | 'finished' | 'dropped'`), `notes` (la nota sulla serie), `startedAt`, `updatedAt`. Gli episodi visti si ricavano dalle `viewings`, così non ci sono due copie da tenere allineate. (Fino alla 1.0 c'era anche `round`, il giro: dalla 1.1 non si usa più.)
 - **`planned`** (record unico, facoltativo): la prossima serata in programma, con `date`, `place` e `movieIds` ordinati. È l'erede dell'"appuntamento".
 - **`meta`** (solo di questo telefono, non va nel backup): `lastBackupAt`, `backupReminderAt`, `feedbackSentAt[]`, `updateCheck` (§10: `lastAt`, `etag`, `latest`, `remaining`, `resetAt`, `dismissedVersion`, `dismissedUntil`).
 
@@ -234,6 +234,8 @@ seasons: {
 - Le stagioni nuove (serie ancora in corso) si aggiungono dall'editor; in modalità completa l'app riprova OMDb al massimo una volta alla settimana per le serie non finite.
 
 ### Avanzamento
+> Dalla 1.1 le serie sono più semplici: niente giri, niente voti e note sui singoli episodi (stanno su stagioni e serie), una data sola in cima alla sezione per tutto quello che si segna, niente finestre a fine stagione. Quello che segue è il piano originale; dove non torna, vale il codice (series-ui.js).
+
 - Nella scheda di una serie c'è la sezione **"Episodi"**: stagioni a fisarmonica, ognuna con la barra "6/10" e la griglia degli episodi (numero e titolo, se c'è). Gli episodi visti sono pieni.
 - **Pulsante principale "Visto S2·E4"**: segna il prossimo episodio con la data di oggi. Toccandolo più volte nello stesso giorno gli episodi si aggiungono alla **stessa** sessione del diario ("Oggi: S2·E4–E6").
 - Toccando un episodio della griglia lo si segna o si toglie il segno. Una pressione lunga su un episodio segna anche tutti i precedenti ("Segna fino a qui").

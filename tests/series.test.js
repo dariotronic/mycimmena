@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { IDBFactory } from 'fake-indexeddb';
 import { createStore } from '../www/assets/js/store.js';
+import { seriesProgress } from '../www/assets/js/app-data.js';
 import {
-	allEpisodes, completedBy, customStructure, episodeDetails, episodesUpTo, formatEpisodes, lostEpisodes, missingOmdbSeasons, nextEpisode,
+	allEpisodes, completedBy, customStructure, episodeDays, episodesSummary, episodesUpTo, formatEpisodes, lostEpisodes, missingOmdbSeasons, nextEpisode,
 	normalizeEpisodes, progress, seasonProgress, structureFromOmdb, watchedEpisodes, withOmdbSeason
 } from '../www/assets/js/series.js';
 
@@ -33,15 +34,27 @@ test('finds the next episode, progress and completed seasons', () => {
 	assert.equal(nextEpisode(twoSeasons, new Set(allEpisodes(twoSeasons).map(({ s, e }) => `${s}-${e}`))), null);
 });
 
-test('counts watched episodes of the current round only', () => {
+test('counts an episode as watched if any viewing has it, also from the old rounds', () => {
 	const viewings = [
-		{ movieId: 'tt1', round: 1, episodes: [{ s: 1, e: 1 }, { s: 1, e: 2 }] },
-		{ movieId: 'tt1', episodes: [{ s: 1, e: 3 }] },
-		{ movieId: 'tt1', round: 2, episodes: [{ s: 1, e: 1 }] },
-		{ movieId: 'tt2', round: 1, episodes: [{ s: 1, e: 4 }] }
+		{ movieId: 'tt1', scope: 'episodes', round: 1, episodes: [{ s: 1, e: 1 }, { s: 1, e: 2 }] },
+		{ movieId: 'tt1', scope: 'episodes', episodes: [{ s: 1, e: 3 }] },
+		{ movieId: 'tt1', scope: 'episodes', round: 2, episodes: [{ s: 1, e: 1 }] },
+		{ movieId: 'tt1', scope: 'season', season: 2, episodes: [] },
+		{ movieId: 'tt2', scope: 'episodes', episodes: [{ s: 1, e: 4 }] }
 	];
-	assert.deepEqual([...watchedEpisodes(viewings, 'tt1', 1)].sort(), ['1-1', '1-2', '1-3']);
-	assert.deepEqual([...watchedEpisodes(viewings, 'tt1', 2)], ['1-1']);
+	assert.deepEqual([...watchedEpisodes(viewings, 'tt1')].sort(), ['1-1', '1-2', '1-3']);
+});
+
+test('groups the episodes of a series by day and labels them shortly', () => {
+	const days = episodeDays([
+		{ scope: 'episodes', date: '2026-11-20', episodes: [{ s: 1, e: 2 }] },
+		{ scope: 'episodes', date: '2026-11-22', episodes: [{ s: 2, e: 1 }] },
+		{ scope: 'episodes', date: '2026-11-20', episodes: [{ s: 1, e: 1 }] },
+		{ scope: 'season', date: '2026-11-23', season: 1, episodes: [] }
+	]);
+	assert.deepEqual(days.map(day => [day.date, day.episodes.length, day.viewings.length]), [['2026-11-22', 1, 1], ['2026-11-20', 2, 2]]);
+	assert.equal(episodesSummary(days[1].episodes), 'S1 · E1–E2');
+	assert.equal(episodesSummary([{ s: 1, e: 1 }, { s: 1, e: 3 }, { s: 1, e: 4 }, { s: 2, e: 1 }]), 'Stagione 1 · 3 episodi, S2 · E1');
 });
 
 test('builds the structure from OMDb lazily and lets the user fix it by hand', () => {
@@ -106,7 +119,7 @@ test('marks every episode as its own viewing, moves the series to "watching" and
 	assert.deepEqual(state.planned.movieIds, []);
 	// Una visione (una card nel diario) per episodio, anche nello stesso giorno; l'1, già segnato, non si ripete.
 	assert.equal(state.viewings.length, 4);
-	assert.ok(state.viewings.every(viewing => viewing.episodes.length === 1 && viewing.scope === 'episodes' && viewing.round === 1));
+	assert.ok(state.viewings.every(viewing => viewing.episodes.length === 1 && viewing.scope === 'episodes'));
 	assert.deepEqual(state.viewings.filter(viewing => viewing.date === '2026-11-20').map(viewing => viewing.episodes[0].e).sort(), [1, 2, 3]);
 	// Togliere il segno toglie le loro visioni.
 	await store.unmarkEpisodes(severance.id, [{ s: 1, e: 4 }, { s: 1, e: 2 }]);
@@ -115,46 +128,46 @@ test('marks every episode as its own viewing, moves the series to "watching" and
 	await assert.rejects(store.markEpisodes(severance.id, [], { date: '2026-11-20' }), /Nessun episodio/);
 });
 
-test('opens a single episode of an old multi-episode viewing as its own, and adds new episode viewings from the diary', async () => {
+test('changes date, place and company of a day of episodes, and copies them to the next episodes', async () => {
 	const store = freshStore();
 	await store.addToWatchlist([severance]);
-	// Visione di più episodi insieme, come le salvavano le versioni fino alla 0.5.
-	const old = await store.addViewing({ movieId: severance.id, date: '2026-11-20', place: 'Divano', scope: 'episodes', episodes: [{ s: 1, e: 1 }, { s: 1, e: 2 }], round: 1, rating: 8, notes: '<p>Bello</p>' });
-	const ownId = await store.splitEpisode(severance.id, { s: 1, e: 2 });
+	await store.markEpisodes(severance.id, [{ s: 1, e: 1 }, { s: 1, e: 2 }], { date: '2026-11-20' });
+	await store.markEpisodes(severance.id, [{ s: 1, e: 3 }], { date: '2026-11-21' });
+	assert.equal(await store.updateEpisodeDay(severance.id, '2026-11-20', { date: '2026-11-19', place: 'Divano', withWhom: 'Giulia' }), 2);
 	let state = await store.loadAll();
-	const own = state.viewings.find(viewing => viewing.id === ownId);
-	assert.deepEqual([own.date, own.place, own.episodes, own.rating, own.notes], ['2026-11-20', 'Divano', [{ s: 1, e: 2 }], null, '']);
-	const rest = state.viewings.find(viewing => viewing.id === old.id);
-	assert.deepEqual([rest.episodes, rest.rating], [[{ s: 1, e: 1 }], 8], 'voto e note restano alla visione di prima');
-	assert.equal(await store.splitEpisode(severance.id, { s: 1, e: 1 }), old.id, 'una visione di un episodio solo resta quella');
-	assert.equal(await store.splitEpisode(severance.id, { s: 2, e: 1 }), null);
-	// La visione nuova di un episodio dal diario, con le sue note: la serie parte come con markEpisodes.
-	await store.addToWatchlist([severance]);
-	await store.addViewing({ movieId: severance.id, date: '2026-11-21', scope: 'episodes', episodes: [{ s: 1, e: 3 }], round: 1, notes: '<p>Che finale!</p>' });
+	const of = e => state.viewings.find(viewing => viewing.episodes[0].e === e);
+	assert.deepEqual([1, 2].map(e => [of(e).date, of(e).place, of(e).withWhom]), [['2026-11-19', 'Divano', 'Giulia'], ['2026-11-19', 'Divano', 'Giulia']]);
+	assert.deepEqual([of(3).date, of(3).place], ['2026-11-21', null], 'gli altri giorni non cambiano');
+	// Gli episodi segnati dopo prendono dove e con chi dall'ultimo che li ha.
+	await store.markEpisodes(severance.id, [{ s: 1, e: 4 }], { date: '2026-11-22' });
 	state = await store.loadAll();
-	assert.deepEqual(state.watchlist, []);
-	assert.equal(state.series.get(severance.id).status, 'watching');
-	const details = episodeDetails(state.viewings, severance.id);
-	assert.deepEqual(details.get('1-3').hasNote, true);
-	assert.deepEqual(details.get('1-2'), { date: '2026-11-20', viewingId: ownId, hasNote: false });
+	assert.deepEqual([of(4).place, of(4).withWhom], ['Divano', 'Giulia']);
+	await assert.rejects(store.updateEpisodeDay(severance.id, '2026-11-21', { date: '' }), /data/);
 });
 
-test('rates seasons and the whole series, changes status and starts a new round', async () => {
+test('keeps one vote per season and one for the series, without writing it on the episodes', async () => {
 	const store = freshStore();
 	await store.addToWatchlist([severance]);
 	await store.markEpisodes(severance.id, [{ s: 1, e: 1 }], { date: '2026-11-20' });
-	const seasonVote = await store.addViewing({ movieId: severance.id, date: '2026-11-22', scope: 'season', season: 1, rating: 9 });
-	const seriesVote = await store.addViewing({ movieId: severance.id, date: '2026-11-22', scope: 'series', rating: 8.5, episodes: [{ s: 1, e: 1 }] });
-	assert.equal(seasonVote.season, 1);
-	assert.deepEqual(seriesVote.episodes, []);
-	assert.equal(seriesVote.season, null);
+	const first = await store.setSeriesVote(severance.id, { scope: 'season', season: 1, rating: 9 });
+	const again = await store.setSeriesVote(severance.id, { scope: 'season', season: 1, rating: 7.5 });
+	assert.equal(again.id, first.id, 'lo stesso voto, cambiato');
+	await store.setSeriesVote(severance.id, { scope: 'series', rating: 8.5 });
+	let state = await store.loadAll();
+	assert.deepEqual(state.viewings.filter(viewing => viewing.scope === 'season').map(viewing => [viewing.season, viewing.rating]), [[1, 7.5]]);
+	assert.equal(state.viewings.find(viewing => viewing.scope === 'episodes').rating, null, 'gli episodi restano senza voto');
+	const info = seriesProgress(state, severance.id);
+	assert.deepEqual([info.seasonVotes.get(1), info.seriesVote], [7.5, 8.5]);
+	await store.setSeriesVote(severance.id, { scope: 'season', season: 1, rating: null });
+	state = await store.loadAll();
+	assert.equal(state.viewings.some(viewing => viewing.scope === 'season'), false);
+	await assert.rejects(store.setSeriesVote(severance.id, { scope: 'season', rating: 8 }), /Stagione/);
+	await assert.rejects(store.setSeriesVote(severance.id, { scope: 'series', rating: 11 }), /voto/);
 	assert.equal((await store.setSeriesStatus(severance.id, 'finished')).status, 'finished');
 	await assert.rejects(store.setSeriesStatus(severance.id, 'boh'), /non valido/);
-	const restarted = await store.restartSeries(severance.id);
-	assert.deepEqual([restarted.status, restarted.round], ['watching', 2]);
-	const { viewings: [viewing] } = await store.markEpisodes(severance.id, [{ s: 1, e: 1 }], { date: '2026-11-20' });
-	assert.equal(viewing.round, 2);
-	assert.equal((await store.loadAll()).viewings.filter(item => item.scope === 'episodes').length, 2);
+	// Togliere un episodio: la serie non è più completata.
+	await store.unmarkEpisodes(severance.id, [{ s: 1, e: 1 }]);
+	assert.equal((await store.loadAll()).series.get(severance.id).status, 'watching');
 	// I film non hanno i campi delle serie.
 	await store.addToWatchlist([{ id: 'tt0078748', title: 'Alien' }]);
 	const film = await store.addViewing({ movieId: 'tt0078748', date: '2026-11-22' });
@@ -193,44 +206,44 @@ test('keeps the OMDb seasons not yet downloaded when a season is added by hand',
 	assert.equal(edited.source, 'mixed');
 });
 
-test('passes a season vote to its episodes without their own vote, and follows it when it changes', async () => {
+test('moves votes and notes of the episodes to the season and the series note (1.0 → 1.1)', async () => {
 	const store = freshStore();
 	await store.addToWatchlist([severance]);
-	await store.markEpisodes(severance.id, [{ s: 1, e: 1 }, { s: 1, e: 2 }, { s: 1, e: 3 }, { s: 2, e: 1 }], { date: '2026-11-20' });
+	const add = input => store.addViewing({ movieId: severance.id, scope: 'episodes', round: 1, ...input });
+	// Giro 1: due episodi della stagione 1 votati (8 e 7), uno con una nota; la stagione 2 ha già il suo voto.
+	await add({ date: '2026-11-20', episodes: [{ s: 1, e: 1 }], rating: 8, notes: '<p>Che inizio</p>' });
+	await add({ date: '2026-11-21', episodes: [{ s: 1, e: 2 }], rating: 7 });
+	await add({ date: '2026-11-22', episodes: [{ s: 2, e: 1 }], rating: 10 });
+	await store.addViewing({ movieId: severance.id, date: '2026-11-22', scope: 'season', season: 2, rating: 6, notes: '<p>Lenta</p>' });
+	// Giro 2: rivisto l'episodio 1.
+	await add({ date: '2026-11-25', episodes: [{ s: 1, e: 1 }], round: 2 });
+	assert.ok(await store.simplifySeries() > 0);
 	const state = await store.loadAll();
-	const byEpisode = (list, s, e) => list.find(viewing => viewing.episodes?.[0]?.s === s && viewing.episodes[0].e === e);
-	// E2 ha un voto suo: resta.
-	await store.updateViewing(byEpisode(state.viewings, 1, 2).id, { rating: 6 });
-	assert.equal(await store.applySeasonRating(severance.id, 1, 9), 2);
-	let viewings = (await store.loadAll()).viewings;
-	assert.deepEqual([1, 2, 3].map(e => byEpisode(viewings, 1, e).rating), [9, 6, 9]);
-	assert.equal(byEpisode(viewings, 1, 1).ratingFrom, 'season');
-	assert.equal(byEpisode(viewings, 2, 1).rating, null, 'le altre stagioni no');
-	// Cambia il voto alla stagione: lo seguono gli episodi che l'avevano preso da lì.
-	await store.applySeasonRating(severance.id, 1, 7.5);
-	viewings = (await store.loadAll()).viewings;
-	assert.deepEqual([1, 2, 3].map(e => byEpisode(viewings, 1, e).rating), [7.5, 6, 7.5]);
-	// Un episodio cambiato a mano non segue più la stagione.
-	await store.updateViewing(byEpisode(viewings, 1, 3).id, { rating: 10 });
-	await store.applySeasonRating(severance.id, 1, null);
-	viewings = (await store.loadAll()).viewings;
-	assert.deepEqual([1, 2, 3].map(e => byEpisode(viewings, 1, e).rating), [null, 6, 10]);
-	assert.equal('ratingFrom' in byEpisode(viewings, 1, 3), false);
+	const episodes = state.viewings.filter(viewing => viewing.scope === 'episodes');
+	assert.ok(episodes.every(viewing => viewing.rating === null && viewing.notes === ''), 'gli episodi restano senza voto e note');
+	const info = seriesProgress(state, severance.id);
+	assert.equal(info.seasonVotes.get(1), 7.5, 'la media degli episodi diventa il voto alla stagione');
+	assert.equal(info.seasonVotes.get(2), 6, 'la stagione che aveva un voto lo tiene');
+	assert.equal(info.seen, 3, 'contano gli episodi di tutti i giri');
+	const note = state.series.get(severance.id).notes;
+	// (Senza DOM, nei test, il filtro delle note tiene solo il testo.)
+	assert.match(note, /S1·E1 · 20 novembre 2026 Che inizio/);
+	assert.match(note, /Stagione 2 · 22 novembre 2026 Lenta/);
+	// Una seconda volta non c'è più niente da fare, e la nota non si ripete.
+	assert.equal(await store.simplifySeries(), 0);
+	assert.equal((await store.loadAll()).series.get(severance.id).notes, note);
 });
 
-test('keeps a general note on the series, also before starting it and across a new round', async () => {
+test('keeps a general note on the series, also before starting it', async () => {
 	const store = freshStore();
 	await store.addToWatchlist([severance]);
 	await store.setSeriesNote(severance.id, '<p onclick="x()">Da vedere con calma</p><script>alert(1)</script>');
-	let record = (await store.loadAll()).series.get(severance.id);
+	const record = (await store.loadAll()).series.get(severance.id);
 	assert.match(record.notes, /^<p>Da vedere con calma/, 'filtrata come le note del diario');
 	assert.doesNotMatch(record.notes, /<script|onclick/);
 	assert.equal(record.status, null, 'una nota non fa iniziare la serie');
 	await store.setSeriesStatus(severance.id, 'finished');
-	await store.restartSeries(severance.id);
-	record = (await store.loadAll()).series.get(severance.id);
-	assert.deepEqual([record.status, record.round], ['watching', 2]);
-	assert.match(record.notes, /Da vedere con calma/, 'la nota resta nel nuovo giro');
+	assert.match((await store.loadAll()).series.get(severance.id).notes, /Da vedere con calma/);
 	await store.setSeriesNote(severance.id, '<p> </p>');
 	assert.equal((await store.loadAll()).series.get(severance.id).notes, '');
 });

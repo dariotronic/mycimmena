@@ -5,7 +5,8 @@
 //   { source: 'omdb' | 'custom' | 'mixed', list: [{ n, episodes, titles: string[] | null, source: 'omdb' | 'custom' }],
 //     omdbTotal: numero di stagioni secondo OMDb o null, updatedAt, checkedAt }
 // Episodi: { s, e } con numeri da 1. Le visioni di una serie hanno `episodes` (gli episodi visti in quella sessione),
-// `scope` ('episodes', 'season' o 'series': a cosa si riferisce il voto), `season` (per scope 'season') e `round`.
+// `scope` ('episodes', 'season' o 'series': a cosa si riferisce il voto) e `season` (per scope 'season'). Dalla 1.1
+// non ci sono più i giri (`round`, che resta nei dati vecchi): un episodio è visto se ha almeno una visione.
 
 export const MAX_SEASONS = 60;
 export const MAX_EPISODES = 500;
@@ -65,30 +66,56 @@ export const totalEpisodes = seasons => (seasons?.list || []).reduce((sum, seaso
 export const seasonOf = (seasons, n) => (seasons?.list || []).find(season => season.n === n) || null;
 export const episodeTitle = (seasons, { s, e }) => seasonOf(seasons, s)?.titles?.[e - 1] || '';
 
-// Episodi visti nel giro corrente: l'unione degli episodi delle visioni di quel giro.
-export function watchedEpisodes(viewings, movieId, round = 1) {
+// Episodi visti: l'unione degli episodi delle visioni della serie.
+export function watchedEpisodes(viewings, movieId) {
 	const watched = new Set();
 	for (const viewing of viewings || []) {
-		if (viewing.movieId !== movieId || (viewing.round || 1) !== round) continue;
+		if (viewing.movieId !== movieId || viewing.scope !== 'episodes') continue;
 		for (const episode of viewing.episodes || []) watched.add(episodeKey(episode));
 	}
 	return watched;
 }
 
-// Per ogni episodio visto nel giro corrente: quando, la sua visione nel diario e se ha una nota (solo per le visioni di
-// un episodio solo). Se per errore un episodio sta in due visioni vale la più recente.
-export function episodeDetails(viewings, movieId, round = 1) {
+// Per ogni episodio visto: l'ultima volta (data) e la sua visione nel diario.
+export function episodeDetails(viewings, movieId) {
 	const details = new Map();
 	const sessions = (viewings || [])
-		.filter(viewing => viewing.movieId === movieId && (viewing.round || 1) === round && viewing.scope === 'episodes')
+		.filter(viewing => viewing.movieId === movieId && viewing.scope === 'episodes')
 		.sort((first, second) => String(first.date).localeCompare(String(second.date)));
 	for (const viewing of sessions) {
 		for (const episode of viewing.episodes || []) {
 			const key = episodeKey(episode);
-			details.set(key, { date: viewing.date, viewingId: viewing.id, hasNote: viewing.episodes.length === 1 && Boolean(viewing.notes) });
+			details.set(key, { date: viewing.date, viewingId: viewing.id });
 		}
 	}
 	return details;
+}
+
+// Giorni con episodi visti, dal più recente: { date, episodes (in ordine), viewings }.
+export function episodeDays(viewings) {
+	const days = new Map();
+	for (const viewing of viewings || []) {
+		if (viewing.scope !== 'episodes' || !(viewing.episodes || []).length) continue;
+		if (!days.has(viewing.date)) days.set(viewing.date, { date: viewing.date, episodes: [], viewings: [] });
+		const day = days.get(viewing.date);
+		day.viewings.push(viewing);
+		day.episodes.push(...viewing.episodes);
+	}
+	return [...days.values()]
+		.map(day => ({ ...day, episodes: normalizeEpisodes(day.episodes) }))
+		.sort((first, second) => String(second.date).localeCompare(String(first.date)));
+}
+
+// Etichetta corta degli episodi di un giorno, stagione per stagione: "S2 · E1–E3" se sono di fila, altrimenti
+// "Stagione 1 · 11 episodi".
+export function episodesSummary(list) {
+	const bySeason = new Map();
+	for (const episode of normalizeEpisodes(list)) bySeason.set(episode.s, [...(bySeason.get(episode.s) || []), episode.e]);
+	return [...bySeason].map(([s, numbers]) => {
+		if (numbers.length === 1) return `S${s} · E${numbers[0]}`;
+		const contiguous = numbers.every((e, index) => !index || e === numbers[index - 1] + 1);
+		return contiguous ? `S${s} · E${numbers[0]}–E${numbers[numbers.length - 1]}` : `Stagione ${s} · ${numbers.length} episodi`;
+	}).join(', ');
 }
 
 export function nextEpisode(seasons, watched) {

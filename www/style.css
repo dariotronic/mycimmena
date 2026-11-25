@@ -931,17 +931,7 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .diary-meta { margin: 4px 0 0; color: var(--muted); font-size: .8rem; }
 .diary-row .review-summary { margin-top: 6px; }
 /* Episodi di una serie nello stesso giorno: una card con la freccia, che apre una card per episodio. */
-.archive-films > .diary-episodes { padding-top: 14px; border-top: 1px solid var(--line); }
-.archive-films > .diary-episodes:first-child { padding-top: 0; border-top: 0; }
-.diary-episodes > summary { padding-top: 0; border-top: 0; cursor: pointer; list-style: none; }
-.diary-episodes > summary::-webkit-details-marker { display: none; }
-.diary-episodes-toggle { display: grid; place-items: center; width: 30px; height: 30px; color: var(--rust); transition: transform .2s ease; }
-.diary-episodes-toggle .material-icons-outlined { font-size: 26px; }
-.diary-episodes[open] .diary-episodes-toggle { transform: rotate(180deg); }
-.diary-episode-list { display: grid; gap: 8px; margin: 12px 0 0 88px; }
-.diary-episodes-label { margin: 4px 0 0; color: var(--rust); font-size: .9rem; font-weight: 700; }
 .diary-average { flex-basis: 100%; margin-top: 2px; color: var(--muted); font-size: .75rem; }
-.diary-episode-actions { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 /* Una visione in sola lettura (occhio nel diario), con la matita per passare al modulo. */
 .viewing-summary { display: grid; gap: 14px; }
 /* La matita della sola lettura sta in alto, a sinistra della croce che chiude (42 px + 8 di spazio). */
@@ -951,10 +941,6 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .viewing-summary-head .viewing-form-title { margin: 0; }
 .viewing-summary-date { margin: 6px 0 0; color: var(--muted); font-size: .9rem; }
 .viewing-summary-notes { margin-top: 0; }
-.diary-episode { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
-.diary-episode-title { margin: 0; font-weight: 700; font-size: .9rem; }
-.diary-episode .review-summary { margin-top: 4px; }
-@media (max-width: 640px) { .diary-episode-list { margin-left: 0; } }
 /* Nel diario della nota si vede solo l'inizio, su una riga: il resto si legge aprendo la visione. */
 .diary-notes { margin: 6px 0 0; overflow: hidden; color: var(--muted); font-size: .95rem; line-height: 1.55; text-overflow: ellipsis; white-space: nowrap; }
 .viewing-form { padding-top: 0; border-top: 0; }
@@ -979,19 +965,12 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .stats-kind-option.active { background: var(--rust); color: var(--paper); }
 .stats-kind-option:focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
 /* "I miei voti" di una serie: gli episodi dello stesso giorno e stagione in un gruppo che si apre. */
-.my-viewing-group details { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
-.my-viewing-group summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; cursor: pointer; list-style: none; }
-.my-viewing-group summary::-webkit-details-marker { display: none; }
-.my-viewing-group-copy { display: grid; gap: 4px; }
-.my-viewing-group details[open] .diary-episodes-toggle { transform: rotate(180deg); }
-.my-viewing-group .my-viewings { padding: 0 10px 10px; }
 /* Serie: nota generale e voto alla stagione. */
 .series-note { display: grid; gap: 6px; margin: 4px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
 .series-note-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .series-note-head .field-label { margin: 0; color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .series-note-text { margin: 0; font-size: .95rem; }
 .series-note-add { margin: 4px 0 12px; }
-.season-vote-help { margin: -4px 0 10px; }
 .my-viewing-item { display: flex; align-items: center; gap: 8px; }
 .my-viewing-item .viewing-read { flex: none; }
 .my-viewing { display: grid; gap: 4px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
@@ -1096,35 +1075,75 @@ html[data-onboarding="true"] .site-shell { flex: none; min-height: 0; margin: 0;
 /* Serie TV: sezione Episodi della scheda, "Stai guardando" ed editor della struttura. */
 .movie-info-series { display: grid; gap: 12px; margin-top: 22px; }
 .movie-info-series[hidden] { display: none; }
-.series-status { display: flex; flex-wrap: wrap; gap: 6px; }
-.series-status .user-filter-chip { min-height: 32px; padding: 3px 12px; font-size: .78rem; }
 .series-summary { margin: 0; font-size: .9rem; line-height: 1.5; }
 .series-next { gap: 8px; }
 .series-next .material-icons-outlined { font-size: 20px; }
 .series-seasons { display: grid; gap: 8px; }
 .series-season { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
-.series-season summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; font-weight: 700; cursor: pointer; list-style: none; }
-.series-season summary::-webkit-details-marker { display: none; }
-.series-season summary::after { content: "▾"; margin-left: 4px; color: var(--muted); transition: transform .18s ease; }
-.series-season[open] summary::after { transform: rotate(180deg); }
-.series-season-count { margin-left: auto; color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
+/* Sezione Episodi (series-ui.js, 1.1): stato e avanzamento, stagioni, giudizio, diario della serie. */
+.series-head { display: grid; gap: 10px; padding: 14px; border-radius: var(--radius-lg); background: var(--accent-wash); }
+.series-head-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.series-head .custom-select-button { width: auto; min-height: 36px; padding: 4px 8px 4px 14px; border-color: var(--rust); border-radius: 999px; background: transparent; color: var(--rust); font-size: .85rem; font-weight: 700; }
+.series-count { color: var(--muted); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.series-bar { display: block; height: 6px; overflow: hidden; border-radius: 3px; background: var(--line); }
+.series-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--rust); }
+.series-mark-row { display: flex; align-items: stretch; gap: 8px; }
+.series-mark-row .series-next { flex: 1; }
+.series-all-seen { flex: 1; align-self: center; margin: 0; font-size: .9rem; font-weight: 700; }
+.series-date-chip { position: relative; display: inline-flex; align-items: center; gap: 2px; min-height: 48px; padding: 0 8px 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font-size: .85rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.series-date-chip .material-icons-outlined { color: var(--rust); font-size: 20px; }
+.series-date-chip input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+.series-date-chip:focus-within { border-color: var(--apricot); box-shadow: 0 0 0 3px var(--accent-focus); }
+.series-block { display: grid; gap: 8px; margin-top: 6px; }
+.series-label { margin: 0; color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.series-season > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; padding: 12px 14px; cursor: pointer; list-style: none; }
+.series-season > summary::-webkit-details-marker { display: none; }
+.series-season > summary .series-bar { grid-column: 1 / -1; }
+.series-season-name { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+.series-season-count { color: var(--muted); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.series-season-count strong { color: var(--rust); }
+.series-season-count::after { content: "▾"; display: inline-block; margin-left: 6px; transition: transform .18s ease; }
+.series-season[open] .series-season-count::after { transform: rotate(180deg); }
+.series-season-invite { grid-column: 1 / -1; color: var(--rust); font-size: .8rem; font-weight: 700; }
+.series-season-body { display: grid; gap: 10px; padding: 0 14px 14px; }
+.episode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; }
+.series-hint { margin: 0; color: var(--muted); font-size: .75rem; }
+.series-season-all { min-height: 42px; font-size: .78rem; }
+.series-vote-form { display: grid; gap: 4px; padding-top: 10px; border-top: 1px solid var(--line); }
+.series-vote-form .review-rating legend { color: var(--muted); font-weight: 600; }
+.series-verdict { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.series-verdict .series-vote-form { padding-top: 0; border-top: 0; }
+.series-verdict .series-note, .series-verdict .series-note-add { margin: 0; }
+.series-verdict .series-note { padding: 10px 0 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; }
+.series-verdict .series-note-add { justify-self: start; }
+.series-structure-link { justify-self: start; }
+.series-days { display: grid; margin: 0; padding: 0; list-style: none; }
+.series-day { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 48px; padding: 8px 0; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; }
+.series-day-count { display: inline-flex; align-items: center; flex: none; color: var(--muted); font-size: .8rem; }
+.series-day-count .material-icons-outlined { color: var(--rust); font-size: 20px; }
+.series-days + .text-button { justify-self: start; }
+/* Editor delle stagioni: − e + al posto dei campi numerici. */
+.structure-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.structure-row-copy { display: grid; justify-items: start; gap: 2px; }
+.structure-row-name { font-weight: 700; }
+.structure-stepper { display: flex; align-items: center; gap: 8px; }
+.structure-stepper .icon-button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: manipulation; }
+.structure-value { min-width: 2.2em; font-size: 1.1rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.structure-add-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.structure-add-row .button { gap: 6px; }
+.structure-reset { justify-self: center; }
+/* Diario: un giorno di episodi di una serie in una riga; il modulo del giorno. */
+.diary-episodes-label { margin: 4px 0 0; color: var(--rust); font-size: .9rem; font-weight: 700; }
+.episode-day-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.episode-day-list li { padding: 3px 10px; border-radius: 999px; background: var(--accent-wash); font-size: .8rem; font-weight: 600; }
 .series-custom-badge { padding: 1px 8px; border-radius: 999px; background: var(--clay-wash); color: var(--muted); font-size: .62rem; font-weight: 700; }
-.episode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 6px; padding: 0 12px 10px; }
 .episode { min-height: 40px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .episode.seen { border-color: var(--rust); background: var(--rust); color: var(--paper); }
 .episode:focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
 /* Episodio con una nota: un puntino nell'angolo. */
 .episode { position: relative; }
-.episode.has-note::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--apricot); }
-.series-season-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 0 12px 12px; font-size: .8rem; }
-.series-season-actions input { min-height: 34px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--paper); color: var(--ink); font: inherit; }
-.series-hint { margin: 0; font-size: .75rem; }
-.series-structure-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; }
 .series-quick-structure { display: grid; gap: 12px; }
 .series-quick-structure .help-text { margin: 0; }
-.series-votes { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: .85rem; }
-.series-vote-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
-.series-vote-row small { color: var(--muted); }
 .diary-label { color: var(--muted); font-family: Montserrat, sans-serif; font-size: .8em; font-weight: 600; }
 .watching { display: grid; gap: 4px; margin: 0 0 24px; }
 .watching .section-title { margin-bottom: 6px; font-size: 1.35rem; }
@@ -1137,11 +1156,6 @@ html[data-onboarding="true"] .site-shell { flex: none; min-height: 0; margin: 0;
 .watching-row:first-of-type { border-top: 0; }
 .watching-copy .movie-year { margin: 4px 0 0; }
 .structure-form { display: grid; gap: 14px; }
-.structure-same { display: flex; gap: 8px; }
-.structure-same input { min-width: 0; flex: 1; }
-.structure-rows { display: grid; gap: 6px; max-height: 40vh; overflow: auto; }
-.structure-row { display: grid; grid-template-columns: minmax(0, 1fr) 6rem auto; align-items: center; gap: 10px; font-size: .9rem; }
-.structure-row input, .structure-form .field input { min-height: 40px; padding: 6px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
 
 /* Impostazioni, film del cuore, compleanno, pagina Informazioni. */
 .settings-profile { display: flex; align-items: center; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }

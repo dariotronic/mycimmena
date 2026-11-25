@@ -51,7 +51,7 @@ const getData = () => data;
 initColorMode();
 const navigation = createNavigation({ app });
 initBackButton({ closeMenu: navigation.closeMenu, onBack: () => onboarding.handleBack() });
-const { ask, askConfirmation, openImageLightbox } = createDialogs({ app });
+const { askConfirmation, openImageLightbox } = createDialogs({ app });
 // Colori dal film del cuore: si riallineano dopo ogni lettura dei dati e quando arriva la sua locandina.
 const posterTheme = createPosterTheme({ store, getData });
 // Le locandine scaricate in sottofondo compaiono al ridisegno successivo, senza interrompere chi sta scrivendo.
@@ -96,7 +96,6 @@ const { infoButton, titleWithInfo, refreshMovieInfo } = createMovieInfo({
 const viewRenderer = createViews({
 	getColorMode: () => document.documentElement.dataset.theme,
 	getDiaryQuery: () => diary.getDiaryQuery(),
-	getDiaryOpenGroups: () => diary.getDiaryOpenGroups(),
 	getRestoreNotice: () => restoreNotice,
 	getData,
 	getMovieSearchMode: () => search.getMovieSearchMode(),
@@ -131,11 +130,9 @@ const diary = createDiary({
 	getData,
 	viewRenderer,
 	askConfirmation,
-	refresh,
-	// Dopo la visione nuova di un episodio: voto proposto alla stagione o alla serie appena finite.
-	onEpisodeSaved: (movieId, before, episodes) => seriesUi.proposeVotes(movieId, before, episodes)
+	refresh
 });
-const seriesUi = createSeriesUi({ app, store, details, getData, refresh, ask, askConfirmation, openViewing: target => diary.openViewingForm(target), refreshMovieInfo, renderEditor: options => viewRenderer.richEditor(options) });
+const seriesUi = createSeriesUi({ app, store, details, getData, refresh, askConfirmation, refreshMovieInfo, renderEditor: options => viewRenderer.richEditor(options), openDay: target => diary.openEpisodeDay(target) });
 // Notifiche locali: si riallineano da sole dopo ogni lettura dei dati; il permesso si chiede solo dopo un'azione.
 const notifications = createNotifications({ getData });
 const askNotifications = () => notifications.sync({ ask: true }).then(updateNotifyStatus);
@@ -415,6 +412,12 @@ window.addEventListener('online', () => state && posters.ensure([...state.movies
 		await posters.loadSaved();
 	} catch (error) {
 		console.warn('Locandine salvate non disponibili.', error);
+	}
+	// Serie delle versioni fino alla 1.0: voti e note degli episodi passano a stagione e serie (store.js).
+	try {
+		await store.simplifySeries();
+	} catch (error) {
+		console.warn('Serie non aggiornate.', error);
 	}
 	await loadData();
 	render();

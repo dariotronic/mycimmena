@@ -1,7 +1,7 @@
 // Modello dati delle viste: da quello che c'è in store.js all'oggetto `data` che le viste leggono
 // (sul sito era la risposta del server). Niente DOM, così si testa da solo.
 import { detailModeOf } from './details.js';
-import { episodeDetails, episodeTitle, formatEpisodes, nextEpisode, progress, watchedEpisodes } from './series.js';
+import { episodeDays, episodeDetails, episodeTitle, formatEpisodes, nextEpisode, progress, watchedEpisodes } from './series.js';
 
 // Un titolo del catalogo nel formato delle viste: `poster` è l'URL di IMDb, `poster_local` la copia sul telefono.
 // I dettagli (regista, trama…) arrivano da OMDb in modalità completa; in light ci sono gli attori principali di IMDb.
@@ -32,25 +32,30 @@ export function viewMovie(movie, posterUrlFor = () => '') {
 
 const byDateDesc = (first, second) => (second.date || '').localeCompare(first.date || '') || (second.createdAt || '').localeCompare(first.createdAt || '');
 
-// Avanzamento di una serie: giro corrente, episodi visti, prossimo episodio e quanti ne mancano.
+// Avanzamento di una serie: episodi visti, prossimo episodio, quanti ne mancano, voti a stagioni e serie.
 export function seriesProgress(state, movieId) {
 	const record = state?.series?.get?.(movieId) || null;
 	const movie = state?.movies?.get?.(movieId);
-	const round = record?.round || 1;
-	const watched = watchedEpisodes(state?.viewings || [], movieId, round);
+	const own = (state?.viewings || []).filter(viewing => viewing.movieId === movieId);
+	const watched = watchedEpisodes(own, movieId);
+	// Il voto più recente, se per una stagione (o la serie) ce n'è più d'uno (i giri delle versioni fino alla 1.0).
+	const latestVotes = scope => [...own.filter(viewing => viewing.scope === scope && viewing.rating !== null && viewing.rating !== undefined)]
+		.sort((first, second) => String(first.date).localeCompare(String(second.date)) || String(first.updatedAt || '').localeCompare(String(second.updatedAt || '')));
 	const seasons = movie?.seasons || null;
 	const next = seasons ? nextEpisode(seasons, watched) : null;
 	return {
 		status: record?.status || null,
 		// Nota generale sulla serie (HTML filtrato), dalla scheda della serie.
 		notes: record?.notes || '',
-		// Voti dati alle stagioni nel giro corrente: n → visione (scope 'season').
-		seasonVotes: new Map((state?.viewings || []).filter(viewing => viewing.movieId === movieId && viewing.scope === 'season' && (viewing.round || 1) === round).map(viewing => [viewing.season, viewing])),
-		round,
+		// Voti dati alle stagioni: n → voto; e a tutta la serie (null se non c'è).
+		seasonVotes: new Map(latestVotes('season').map(viewing => [viewing.season, Number(viewing.rating)])),
+		seriesVote: latestVotes('series').map(viewing => Number(viewing.rating)).pop() ?? null,
 		startedAt: record?.startedAt || null,
 		watched,
-		// Data, visione e nota di ogni episodio visto (series.js, episodeDetails).
-		episodes: episodeDetails(state?.viewings || [], movieId, round),
+		// Data e visione di ogni episodio visto (series.js, episodeDetails).
+		episodes: episodeDetails(own, movieId),
+		// Giorni con episodi visti, dal più recente: { date, episodes, viewings } (il diario della serie).
+		days: episodeDays(own),
 		seasons,
 		next,
 		...(seasons ? progress(seasons, watched) : { seen: watched.size, total: 0, remaining: 0 })

@@ -44,7 +44,9 @@ export const TOASTS = {
 	episodesMarked: { enabled: true, message: ({ label }) => (label ? `Visto: ${label}` : 'Episodi segnati') },
 	seriesStructureSaved: { enabled: true, message: 'Stagioni salvate' },
 	seriesNoteSaved: { enabled: true, message: 'Nota salvata' },
-	seriesRated: { enabled: true, message: 'Voto salvato nel diario' },
+	seriesRated: { enabled: true, message: 'Voto salvato' },
+	seriesVoteRemoved: { enabled: true, message: 'Voto tolto' },
+	episodesUnmarked: { enabled: true, message: ({ label }) => `Non più visto: ${label}` },
 
 	// Backup e importazione
 	backupSaved: { enabled: true, duration: 4000, message: ({ where, path }) => ({ documents: 'Backup salvato in Documenti/myCimmena', shared: 'Backup pronto da condividere', download: 'Backup scaricato' })[where] || 'Backup salvato' },
