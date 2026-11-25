@@ -186,3 +186,15 @@ test('lets the user mark a series as completed, vote a season and keep a note on
 	assert.match(voted, /<div class="review-content series-note-text"><p>Da finire<\/p><\/div>/);
 	assert.match(voted, /data-series-status="watching" aria-pressed="false"/, 'gli stati si scelgono anche prima di iniziare');
 });
+
+test('replaces every drop-down with a sheet in the app style, and Back closes it first', () => {
+	const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
+	assert.match(read('../www/script.js'), /initCustomSelects\(\);/);
+	const module = read('../www/assets/js/custom-select.js');
+	assert.match(module, /select\.dispatchEvent\(new Event\('change', \{ bubbles: true \}\)\)/, 'il <select> vero resta e avvisa chi lo ascolta');
+	assert.match(module, /observer\.observe\(document\.body, \{ childList: true, subtree: true \}\)/, 'anche i menù disegnati dopo');
+	assert.match(read('../www/style.css'), /\.select-sheet-option\.selected \{[^}]*color: var\(--rust\)/);
+	// Indietro: prima la finestra aperta (anche il pannello di un menù nel benvenuto), poi il passo dell'onboarding.
+	const back = read('../www/assets/js/back-button.js');
+	assert.ok(back.indexOf("querySelectorAll('dialog[open]')") < back.indexOf('if (onBack()) return;'));
+});

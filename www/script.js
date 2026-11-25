@@ -36,8 +36,11 @@ import { createNotifications } from './assets/js/notifications.js';
 import { createPosterTheme } from './assets/js/poster-theme-ui.js';
 import { renderStats } from './assets/js/stats-ui.js';
 import { pageHeader } from './assets/js/components.js';
+import { initCustomSelects } from './assets/js/custom-select.js';
 
 hydrateIcons(document);
+// Menù a tendina nello stile dell'app (custom-select.js), per tutti quelli che compaiono nella pagina.
+initCustomSelects();
 
 const app = document.getElementById('app');
 let state = null;

@@ -317,6 +317,30 @@ body.modal-open { overflow: hidden; }
 .calendar-film-actions { display: flex; flex-direction: column; align-items: center; gap: 0; }
 .calendar-film-actions .button.icon-only, .calendar-film-actions .icon-button.small,
 .movie-actions .button.icon-only, .movie-actions .icon-button.small { width: 34px; height: 34px; flex-shrink: 0; }
+/* Menù a tendina (custom-select.js): il <select> vero resta nascosto sotto, al suo posto un campo con freccia che
+   apre un pannello dal basso con i colori del tema. */
+.custom-select-native { position: absolute; width: 1px; height: 1px; margin: 0; padding: 0; overflow: hidden; clip: rect(0 0 0 0); border: 0; opacity: 0; pointer-events: none; }
+.custom-select-button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 48px; padding: 10px 12px 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: border-color .18s ease, box-shadow .18s ease; }
+.custom-select-button:focus-visible, .custom-select-button[aria-expanded="true"] { outline: none; border-color: var(--apricot); box-shadow: 0 0 0 3px var(--accent-focus); }
+.custom-select-button:disabled { cursor: not-allowed; opacity: .5; }
+.custom-select-button.is-placeholder .custom-select-value { color: var(--muted); }
+.custom-select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.custom-select-chevron { flex: none; color: var(--rust); font-size: 22px; transition: transform .2s ease; }
+.custom-select-button[aria-expanded="true"] .custom-select-chevron { transform: rotate(180deg); }
+.select-sheet { position: fixed; inset: auto 0 0 0; width: 100%; max-width: 560px; max-height: 72vh; margin: auto auto 0; padding: 0; border: 0; border-radius: 22px 22px 0 0; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-lift); }
+.select-sheet[open] { animation: select-sheet-in .22s ease-out; }
+.select-sheet::backdrop { background: rgba(0, 0, 0, .38); }
+@keyframes select-sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .select-sheet[open] { animation: none; } }
+.select-sheet-panel { display: flex; flex-direction: column; max-height: 72vh; padding: 10px 0 max(14px, env(safe-area-inset-bottom)); }
+.select-sheet-panel::before { content: ""; align-self: center; width: 40px; height: 4px; margin: 0 0 10px; border-radius: 2px; background: var(--line); }
+.select-sheet-title { margin: 0 22px 8px; color: var(--muted); font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.select-sheet-list { overflow-y: auto; overscroll-behavior: contain; }
+.select-sheet-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 52px; padding: 10px 22px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; font-size: 1rem; text-align: left; cursor: pointer; }
+.select-sheet-option:first-child { border-top: 0; }
+.select-sheet-option.selected { background: var(--accent-wash); color: var(--rust); font-weight: 700; }
+.select-sheet-option:disabled { cursor: not-allowed; opacity: .45; }
+.select-sheet-check { flex: none; font-size: 22px; }
 .field input, .field select { width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); transition: border-color .18s ease, box-shadow .18s ease; }
 .field input:focus, .field select:focus { outline: none; border-color: var(--apricot); box-shadow: 0 0 0 3px var(--accent-focus); }
 /* Avviso in cima alle Impostazioni dopo il ripristino di un backup. */
@@ -1233,6 +1257,7 @@ a.has-update::after { content: ''; position: absolute; top: 6px; right: 6px; wid
 .stats-page { display: grid; gap: 18px; }
 .stats-filter { display: flex; align-items: center; gap: 10px; }
 .stats-filter label { color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.stats-filter .custom-select-button { width: auto; min-width: 11rem; min-height: 42px; }
 .stats-filter select { min-height: 42px; padding: 6px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
 .stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
 .stat-tile { display: grid; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }

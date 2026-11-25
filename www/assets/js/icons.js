@@ -6,6 +6,7 @@ const iconMap = Object.freeze({
 	arrow_downward: 'arrow_downward',
 	arrow_upward: 'arrow_upward',
 	casino: 'casino',
+	check: 'check',
 	close: 'close',
 	content_copy: 'content_copy',
 	dark_mode: 'dark_mode',

@@ -4,12 +4,13 @@
 // invece di chiuderla, come fanno le app di sistema.
 import { route } from './navigation.js';
 
-// `onBack` (facoltativo) gestisce il tasto per primo, per esempio nell'onboarding: se restituisce true basta così.
+// `onBack` (facoltativo) gestisce il tasto dopo le finestre aperte, per esempio nell'onboarding: se restituisce true
+// basta così.
 export function initBackButton({ closeMenu, onBack = () => false }) {
 	const app = globalThis.Capacitor?.Plugins?.App;
 	if (!app?.addListener) return;
 	app.addListener('backButton', ({ canGoBack }) => {
-		if (onBack()) return;
+		// Prima la finestra aperta (anche sopra l'onboarding: il pannello di un menù, il backup), poi il resto.
 		const dialog = [...document.querySelectorAll('dialog[open]')].pop();
 		if (dialog) {
 			// Lo stesso evento del tasto Esc: i moduli che bloccano la chiusura lo annullano.
@@ -17,6 +18,7 @@ export function initBackButton({ closeMenu, onBack = () => false }) {
 			if (dialog.dispatchEvent(cancel)) dialog.close();
 			return;
 		}
+		if (onBack()) return;
 		const menu = document.getElementById('site-menu');
 		if (menu && !menu.hidden) {
 			closeMenu();

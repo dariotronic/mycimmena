@@ -384,3 +384,17 @@ test('keeps the profile of this phone when the backup has none, or fills what th
 		assert.deepEqual([restored.name, restored.birthday, restored.place], ['Gigi', '08-12', 'divano'], mode);
 	}
 });
+
+test('keeps the favourite film in the catalogue when the backup does not have it', async () => {
+	for (const mode of ['merge', 'replace']) {
+		const store = freshStore();
+		await store.saveMovie({ id: 'tt0078748', title: 'Alien', year: '1979' });
+		await store.updateKv('profile', { name: 'Dario', favoriteMovieId: 'tt0078748' });
+		const backup = { movies: [{ id: 'tt0084787', title: 'The Thing', year: '1982' }], watchlist: [], viewings: [], series: [], planned: null, profile: null, settings: null, onboarding: null };
+		await store.restoreData(backup, { mode });
+		const state = await store.loadAll();
+		assert.equal(state.profile.favoriteMovieId, 'tt0078748', mode);
+		assert.equal(state.movies.get('tt0078748')?.title, 'Alien', `${mode}: il film del cuore resta nel catalogo`);
+		assert.ok(state.movies.has('tt0084787'));
+	}
+});

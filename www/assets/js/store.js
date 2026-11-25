@@ -550,6 +550,12 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 			// Profilo, serata e impostazioni del telefono prima del ripristino: con "Sostituisci tutto" restano quelli che il
 			// backup non ha (un backup fatto senza profilo non cancella nome, compleanno e risposte del benvenuto).
 			const phoneBefore = { planned: await getKv(kv, 'planned'), profile: await getKv(kv, 'profile') };
+			// I titoli a cui rimandano (film del cuore, serata): se restano profilo o serata del telefono, restano anche loro.
+			const phoneMovies = new Map();
+			for (const id of [phoneBefore.profile?.favoriteMovieId, ...(phoneBefore.planned?.movieIds || [])].filter(Boolean)) {
+				const movie = await request(movies.get(id));
+				if (movie) phoneMovies.set(id, movie);
+			}
 			if (mode === 'replace') {
 				for (const objectStore of [movies, watchlist, viewings, series]) await request(objectStore.clear());
 				for (const key of ['planned', 'profile', 'settings', 'onboarding']) await request(kv.delete(key));
@@ -587,6 +593,12 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 					if (hasValidKey(phone) && !hasValidKey(next)) next = { ...next, detailMode: 'full', omdbKey: phone.omdbKey, omdbKeyStatus: 'valid', omdbPausedUntil: null };
 				}
 				await putKv(kv, key, next);
+			}
+			// Film del cuore e titoli della serata che il backup non ha nel catalogo: quelli del telefono.
+			const finalProfile = await getKv(kv, 'profile');
+			const finalPlanned = await getKv(kv, 'planned');
+			for (const id of [finalProfile?.favoriteMovieId, ...(finalPlanned?.movieIds || [])].filter(Boolean)) {
+				if (phoneMovies.has(id) && !(await request(movies.get(id)))) await request(movies.put(phoneMovies.get(id)));
 			}
 			// Un telefono che ha già fatto il benvenuto non lo rifà per un backup (anche con "Sostituisci tutto", o con un
 			// backup senza lo stato del benvenuto): si resta dove si era, con profilo e impostazioni ripristinati.
