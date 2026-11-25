@@ -3,7 +3,7 @@
 // Ogni barra è un pulsante con il valore nel suggerimento (passandoci sopra o toccandola) e ogni grafico ha
 // "Vedi come tabella". Il filtro dell'anno sta in alto, sopra tutti i grafici.
 import { escapeHtml, formatSpipe, movieName } from './domain.js';
-import { computeStats, MONTHS, statsYears } from './stats.js';
+import { computeStats, MONTHS, ofKind, statsYears } from './stats.js';
 
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 const visioni = count => plural(count, 'visione', 'visioni');
@@ -24,7 +24,7 @@ const table = (head, rows) => `
 
 // Colonne dal basso: l'altezza segue il valore; il numero si scrive solo sulla colonna più alta (le altre nel
 // suggerimento e nella tabella).
-function columns({ id, title, subtitle, items, describe }) {
+function columns({ id, title, subtitle, items, describe, unitLabel = 'Visioni' }) {
 	const max = Math.max(1, ...items.map(item => item.count));
 	const top = items.reduce((best, item) => (item.count > (best?.count ?? 0) ? item : best), null);
 	return `
@@ -40,7 +40,7 @@ function columns({ id, title, subtitle, items, describe }) {
 					</div>
 				`).join('')}
 			</div>
-			${table(['', 'Visioni'], items.map(item => [item.tableLabel || item.label, item.count]))}
+			${table(['', unitLabel], items.map(item => [item.tableLabel || item.label, item.count]))}
 		</section>
 	`;
 }
@@ -70,11 +70,21 @@ function bars({ id, title, subtitle, items, empty }) {
 	`;
 }
 
-export function renderStats(data, { year = '', today, formatDate = value => value }) {
-	const stats = computeStats(data, { year, today });
-	const years = statsYears(data?.viewings);
+// Interruttore Film | Serie TV, come quello delle schede nel benvenuto.
+const kindSwitch = kind => `
+	<div class="stats-kind" role="radiogroup" aria-label="Statistiche di">
+		${[['movies', 'Film'], ['series', 'Serie TV']].map(([value, label]) => `<button class="stats-kind-option${kind === value ? ' active' : ''}" type="button" role="radio" aria-checked="${kind === value}" data-stats-kind="${value}">${label}</button>`).join('')}
+	</div>
+`;
+
+export function renderStats(data, { year = '', today, formatDate = value => value, kind = 'movies' }) {
+	const stats = computeStats(data, { year, today, kind });
+	const series = kind === 'series';
+	const years = statsYears(ofKind(data?.viewings, kind));
+	const unit = count => (series ? plural(count, 'episodio', 'episodi') : visioni(count));
 	const period = year ? `nel ${year}` : 'in tutto';
 	const filter = `
+		${kindSwitch(kind)}
 		<div class="stats-filter">
 			<label for="stats-year">Periodo</label>
 			<select id="stats-year" data-stats-year>
@@ -84,7 +94,8 @@ export function renderStats(data, { year = '', today, formatDate = value => valu
 		</div>
 	`;
 	if (!stats.watches && !stats.rated) {
-		return `${filter}<div class="empty-state"><p>${year ? `Nel ${escapeHtml(year)} non ci sono visioni nel diario.` : 'Il diario è vuoto: le statistiche arrivano con le prime visioni.'}</p></div>`;
+		const what = series ? 'episodi di serie' : 'film';
+		return `${filter}<div class="empty-state"><p>${year ? `Nel ${escapeHtml(year)} non ci sono ${what} nel diario.` : `Nel diario non ci sono ancora ${what}: le statistiche arrivano con le prime visioni.`}</p></div>`;
 	}
 	const monthsSubtitle = year ? '' : 'Gli ultimi 12 mesi.';
 	const needsDetails = stats.detailsShare < 1;
@@ -92,22 +103,23 @@ export function renderStats(data, { year = '', today, formatDate = value => valu
 	return `
 		${filter}
 		<div class="stat-tiles">
-			${tile(stats.watches, `visioni ${period}`, stats.rewatches ? plural(stats.rewatches, 'film rivisto', 'film rivisti') : '')}
-			${tile(stats.films, stats.films === 1 ? 'film diverso' : 'film diversi')}
-			${stats.series ? tile(stats.episodes, stats.episodes === 1 ? 'episodio' : 'episodi', plural(stats.series, 'serie', 'serie')) : ''}
+			${series
+				? `${tile(stats.episodes, `${stats.episodes === 1 ? 'episodio' : 'episodi'} ${period}`)}${tile(stats.series, stats.series === 1 ? 'serie' : 'serie diverse', stats.completed ? plural(stats.completed, 'completata', 'completate') : '')}`
+				: `${tile(stats.watches, `visioni ${period}`, stats.rewatches ? plural(stats.rewatches, 'film rivisto', 'film rivisti') : '')}${tile(stats.films, stats.films === 1 ? 'film diverso' : 'film diversi')}`}
 			${stats.average !== null ? tile(`${Math.floor(stats.average)}${stats.average % 1 ? '½' : ''}`, 'voto medio, in spipe', plural(stats.rated, 'voto', 'voti')) : ''}
 			${stats.hours ? tile(`${stats.hours} h`, 'davanti allo schermo', stats.timedWatches < stats.watches ? `contate ${stats.timedWatches} visioni su ${stats.watches}, quelle con la durata` : '') : ''}
 		</div>
 		${columns({
 			id: 'stats-months',
-			title: year ? `Visioni per mese, ${year}` : 'Visioni per mese',
+			title: `${series ? 'Episodi' : 'Visioni'} per mese${year ? `, ${year}` : ''}`,
+			unitLabel: series ? 'Episodi' : 'Visioni',
 			subtitle: monthsSubtitle,
 			items: stats.perMonth.map(item => ({ ...item, tableLabel: `${MONTHS[Number(item.key.slice(5)) - 1]} ${item.year}` })),
-			describe: item => `${MONTHS[Number(item.key.slice(5)) - 1]} ${item.year}: ${visioni(item.count)}`
+			describe: item => `${MONTHS[Number(item.key.slice(5)) - 1]} ${item.year}: ${unit(item.count)}`
 		})}
-		${!year && stats.perYear.length > 1 ? columns({ id: 'stats-years', title: 'Visioni per anno', items: stats.perYear, describe: item => `${item.label}: ${visioni(item.count)}` }) : ''}
-		${stats.rated ? columns({ id: 'stats-ratings', title: 'I tuoi voti', subtitle: 'Quante volte hai dato ogni voto, da 1 a 10 spipe (le mezze vanno con l’intero sopra).', items: stats.ratingBuckets.map(item => ({ ...item, tableLabel: `${item.label} spipe` })), describe: item => `${item.label} ${item.label === '1' ? 'spipa' : 'spipe'}: ${plural(item.count, 'voto', 'voti')}` }) : ''}
-		${favourite ? `
+		${!year && stats.perYear.length > 1 ? columns({ id: 'stats-years', unitLabel: series ? 'Episodi' : 'Visioni', title: `${series ? 'Episodi' : 'Visioni'} per anno`, items: stats.perYear, describe: item => `${item.label}: ${unit(item.count)}` }) : ''}
+		${stats.rated ? columns({ id: 'stats-ratings', unitLabel: 'Voti', title: 'I tuoi voti', subtitle: 'Quante volte hai dato ogni voto, da 1 a 10 spipe (le mezze vanno con l’intero sopra).', items: stats.ratingBuckets.map(item => ({ ...item, tableLabel: `${item.label} spipe` })), describe: item => `${item.label} ${item.label === '1' ? 'spipa' : 'spipe'}: ${plural(item.count, 'voto', 'voti')}` }) : ''}
+		${favourite && !series ? `
 			<section class="stats-card stats-favourite" aria-labelledby="stats-favourite-title">
 				<h2 id="stats-favourite-title" class="stats-card-title">Il regista che non sbaglia mai</h2>
 				<p>${favourite.count
@@ -116,7 +128,7 @@ export function renderStats(data, { year = '', today, formatDate = value => valu
 			</section>
 		` : ''}
 		${bars({ id: 'stats-genres', title: 'Generi più visti', subtitle: needsDetails ? 'Solo dai titoli con la scheda completa.' : '', items: stats.genres, empty: 'Servono le schede complete (con la chiave OMDb) per sapere i generi.' })}
-		${bars({ id: 'stats-directors', title: 'Registi più visti', subtitle: needsDetails ? 'Solo dai film con la scheda completa.' : '', items: stats.directors, empty: 'Servono le schede complete (con la chiave OMDb) per sapere i registi.' })}
+		${series ? '' : bars({ id: 'stats-directors', title: 'Registi più visti', subtitle: needsDetails ? 'Solo dai film con la scheda completa.' : '', items: stats.directors, empty: 'Servono le schede complete (con la chiave OMDb) per sapere i registi.' })}
 		${stats.best.length ? `
 			<section class="stats-card" aria-labelledby="stats-best-title">
 				<h2 id="stats-best-title" class="stats-card-title">I voti più alti</h2>

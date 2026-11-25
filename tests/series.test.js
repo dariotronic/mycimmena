@@ -192,3 +192,45 @@ test('keeps the OMDb seasons not yet downloaded when a season is added by hand',
 	assert.deepEqual(missingOmdbSeasons(edited), [2, 3], 'le stagioni 2 e 3 si scaricano ancora da OMDb');
 	assert.equal(edited.source, 'mixed');
 });
+
+test('passes a season vote to its episodes without their own vote, and follows it when it changes', async () => {
+	const store = freshStore();
+	await store.addToWatchlist([severance]);
+	await store.markEpisodes(severance.id, [{ s: 1, e: 1 }, { s: 1, e: 2 }, { s: 1, e: 3 }, { s: 2, e: 1 }], { date: '2026-11-20' });
+	const state = await store.loadAll();
+	const byEpisode = (list, s, e) => list.find(viewing => viewing.episodes?.[0]?.s === s && viewing.episodes[0].e === e);
+	// E2 ha un voto suo: resta.
+	await store.updateViewing(byEpisode(state.viewings, 1, 2).id, { rating: 6 });
+	assert.equal(await store.applySeasonRating(severance.id, 1, 9), 2);
+	let viewings = (await store.loadAll()).viewings;
+	assert.deepEqual([1, 2, 3].map(e => byEpisode(viewings, 1, e).rating), [9, 6, 9]);
+	assert.equal(byEpisode(viewings, 1, 1).ratingFrom, 'season');
+	assert.equal(byEpisode(viewings, 2, 1).rating, null, 'le altre stagioni no');
+	// Cambia il voto alla stagione: lo seguono gli episodi che l'avevano preso da lì.
+	await store.applySeasonRating(severance.id, 1, 7.5);
+	viewings = (await store.loadAll()).viewings;
+	assert.deepEqual([1, 2, 3].map(e => byEpisode(viewings, 1, e).rating), [7.5, 6, 7.5]);
+	// Un episodio cambiato a mano non segue più la stagione.
+	await store.updateViewing(byEpisode(viewings, 1, 3).id, { rating: 10 });
+	await store.applySeasonRating(severance.id, 1, null);
+	viewings = (await store.loadAll()).viewings;
+	assert.deepEqual([1, 2, 3].map(e => byEpisode(viewings, 1, e).rating), [null, 6, 10]);
+	assert.equal('ratingFrom' in byEpisode(viewings, 1, 3), false);
+});
+
+test('keeps a general note on the series, also before starting it and across a new round', async () => {
+	const store = freshStore();
+	await store.addToWatchlist([severance]);
+	await store.setSeriesNote(severance.id, '<p onclick="x()">Da vedere con calma</p><script>alert(1)</script>');
+	let record = (await store.loadAll()).series.get(severance.id);
+	assert.match(record.notes, /^<p>Da vedere con calma/, 'filtrata come le note del diario');
+	assert.doesNotMatch(record.notes, /<script|onclick/);
+	assert.equal(record.status, null, 'una nota non fa iniziare la serie');
+	await store.setSeriesStatus(severance.id, 'finished');
+	await store.restartSeries(severance.id);
+	record = (await store.loadAll()).series.get(severance.id);
+	assert.deepEqual([record.status, record.round], ['watching', 2]);
+	assert.match(record.notes, /Da vedere con calma/, 'la nota resta nel nuovo giro');
+	await store.setSeriesNote(severance.id, '<p> </p>');
+	assert.equal((await store.loadAll()).series.get(severance.id).notes, '');
+});

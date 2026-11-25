@@ -27,40 +27,57 @@ const data = {
 	]
 };
 
-test('counts viewings, films, episodes, hours and ratings', () => {
+test('counts films and series apart: viewings, episodes, hours and ratings', () => {
 	const all = computeStats(data, { today: '2026-11-23' });
-	assert.equal(all.watches, 4, 'il voto alla serie non è una visione');
+	// Film: solo i film, senza le serie.
+	assert.equal(all.watches, 3);
 	assert.equal(all.films, 2);
 	assert.equal(all.rewatches, 1);
-	assert.deepEqual([all.series, all.episodes], [1, 2]);
-	assert.equal(all.hours, Math.round((109 * 2 + 117 + 60 * 2) / 60));
-	assert.equal(all.rated, 4);
-	assert.equal(all.average, roundHalf((9 + 8 + 7.5 + 10) / 4));
+	assert.deepEqual([all.series, all.episodes], [0, 0]);
+	assert.equal(all.hours, Math.round((109 * 2 + 117) / 60));
+	assert.equal(all.rated, 3);
+	assert.equal(all.average, roundHalf((9 + 8 + 7.5) / 3));
 	assert.equal(all.perMonth.length, 12);
-	assert.deepEqual(all.perMonth.at(-1), { key: '2026-11', label: 'nov', year: '2026', count: 2 });
+	assert.deepEqual(all.perMonth.at(-1), { key: '2026-11', label: 'nov', year: '2026', count: 1 });
 	assert.equal(all.perMonth[0].key, '2025-12');
-	assert.deepEqual(all.perYear.map(item => [item.key, item.count]), [['2025', 1], ['2026', 3]]);
-	assert.deepEqual(all.ratingBuckets.map(item => item.count), [0, 0, 0, 0, 0, 0, 0, 2, 1, 1], '7½ va con l’8');
+	assert.deepEqual(all.perYear.map(item => [item.key, item.count]), [['2025', 1], ['2026', 2]]);
+	assert.deepEqual(all.ratingBuckets.map(item => item.count), [0, 0, 0, 0, 0, 0, 0, 2, 1, 0], '7½ va con l’8');
 	assert.deepEqual(all.genres.slice(0, 2).map(item => [item.name, item.count]), [['Fantascienza', 3], ['Horror', 3]], 'a pari merito, in ordine alfabetico');
 	assert.deepEqual(all.directors[0], { name: 'John Carpenter', count: 2, average: 8.5 });
 	assert.deepEqual(all.favourite, { name: 'John Carpenter', count: 2, films: 1, average: 8.5, rank: 1 });
-	assert.equal(all.best[0].rating, 10);
+	assert.equal(all.best[0].rating, 9);
 	const year = computeStats(data, { year: '2025', today: '2026-11-23' });
 	assert.equal(year.watches, 1);
 	assert.equal(year.perMonth[9].count, 1);
 	assert.deepEqual(statsYears(data.viewings), ['2026', '2025']);
+	// Serie: episodi (anche più d'uno per visione), serie, completate, ore; il voto alla serie è un voto, non una visione.
+	const series = computeStats({ ...data, seriesOf: id => ({ status: id === dark.id ? 'finished' : null }) }, { today: '2026-11-23', kind: 'series' });
+	assert.deepEqual([series.watches, series.series, series.episodes, series.completed], [1, 1, 2, 1]);
+	assert.equal(series.hours, 2);
+	assert.deepEqual([series.rated, series.average], [1, 10]);
+	assert.deepEqual(series.perMonth.at(-1).count, 2, 'per mese si contano gli episodi');
+	assert.equal(series.best[0].rating, 10);
+	assert.equal(series.films, 0);
 });
 
 test('draws the statistics with one accent colour, tooltips and a table for every chart', () => {
 	const html = renderStats(data, { today: '2026-11-23' });
+	assert.match(html, /data-stats-kind="movies"[^>]*>Film<\/button>[\s\S]*data-stats-kind="series"/);
+	assert.match(html, /class="stats-kind-option active" type="button" role="radio" aria-checked="true" data-stats-kind="movies"/);
 	assert.match(html, /<select id="stats-year" data-stats-year>[\s\S]*<option value="2025">2025<\/option>/);
-	assert.match(html, /<span class="stat-value">4<\/span><span class="stat-label">visioni in tutto<\/span>/);
-	assert.match(html, /data-tip="nov 2026: 2 visioni"/);
+	assert.match(html, /<span class="stat-value">3<\/span><span class="stat-label">visioni in tutto<\/span>/);
+	assert.match(html, /data-tip="nov 2026: 1 visione"/);
 	assert.match(html, /Visioni per anno/);
 	assert.match(html, /Di <strong>John Carpenter<\/strong> hai visto 1 film \(2 visioni\) in tutto/);
 	assert.equal((html.match(/Vedi come tabella/g) || []).length, 5);
-	assert.match(renderStats({ viewings: [] }, { today: '2026-11-23' }), /Il diario è vuoto/);
-	assert.match(renderStats(data, { year: '2024', today: '2026-11-23' }), /Nel 2024 non ci sono visioni/);
+	assert.match(renderStats({ viewings: [] }, { today: '2026-11-23' }), /Nel diario non ci sono ancora film/);
+	assert.match(renderStats(data, { year: '2024', today: '2026-11-23' }), /Nel 2024 non ci sono film/);
+	const series = renderStats({ ...data, seriesOf: () => ({ status: 'finished' }) }, { today: '2026-11-23', kind: 'series' });
+	assert.match(series, /<span class="stat-value">2<\/span><span class="stat-label">episodi in tutto<\/span>/);
+	assert.match(series, /1 completata/);
+	assert.match(series, /Episodi per mese/);
+	assert.match(series, /data-tip="nov 2026: 2 episodi"/);
+	assert.doesNotMatch(series, /Registi più visti|Il regista che non sbaglia mai/);
 });
 
 function makeZip(files) {

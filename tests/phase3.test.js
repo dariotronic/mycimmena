@@ -340,3 +340,29 @@ test('keeps the version aligned in package.json, app-info.js and build.gradle', 
 	const ignore = readFileSync(new URL('../.gitignore', import.meta.url), 'utf8');
 	for (const pattern of ['*.jks', 'keystore.properties', 'dist/']) assert.ok(ignore.includes(pattern), pattern);
 });
+
+test('does not restart the welcome after restoring a backup on a phone that already finished it', async () => {
+	for (const mode of ['merge', 'replace']) {
+		for (const onboarding of [null, { step: 'cards' }]) {
+			const store = freshStore();
+			await store.updateKv('onboarding', { done: true, step: 'end', finishedAt: '2026-11-20T10:00:00.000Z' });
+			const backup = { movies: [], watchlist: [], viewings: [], series: [], planned: null, profile: { name: 'Dario' }, settings: null, onboarding };
+			await store.restoreData(backup, { mode });
+			const state = await store.loadAll();
+			assert.equal(state.onboarding.done, true, `${mode}, onboarding del backup: ${JSON.stringify(onboarding)}`);
+			assert.equal(state.profile.name, 'Dario', 'il profilo del backup c’è');
+		}
+	}
+});
+
+test('keeps the series notes in a backup, also for a series not started yet', () => {
+	const series = { id: 'tt11280740', title: 'Severance', year: '2022', type: 'series' };
+	const parsed = parseBackup(JSON.stringify({
+		app: 'myCimmena', kind: 'backup', format: 1, exportedAt: '2026-11-25T10:00:00.000Z',
+		data: { movies: [series], watchlist: [], viewings: [], series: [{ movieId: series.id, status: null, round: 1, notes: '<p>Bella <script>x</script></p>' }, { movieId: series.id, status: 'finished', round: 1 }] }
+	}));
+	assert.match(parsed.data.series[0].notes, /^<p>Bella/);
+	assert.doesNotMatch(parsed.data.series[0].notes, /<script/);
+	assert.equal(parsed.data.series[0].status, null);
+	assert.equal(parsed.data.series[1].status, 'finished');
+});

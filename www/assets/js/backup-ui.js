@@ -143,7 +143,8 @@ export function createBackupUi({ store, getData, getState, refresh, askConfirmat
 		await refresh();
 		dialog.close();
 		showToast('backupRestored', { mode });
-		onRestored();
+		// Dall'onboarding l'esito lo mostra la sua schermata; dalle Impostazioni un avviso in cima alla pagina (script.js).
+		onRestored({ mode, text, fromOnboarding: Boolean(report) });
 	}
 
 	body.addEventListener('click', async event => {

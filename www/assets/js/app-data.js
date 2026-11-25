@@ -42,6 +42,10 @@ export function seriesProgress(state, movieId) {
 	const next = seasons ? nextEpisode(seasons, watched) : null;
 	return {
 		status: record?.status || null,
+		// Nota generale sulla serie (HTML filtrato), dalla scheda della serie.
+		notes: record?.notes || '',
+		// Voti dati alle stagioni nel giro corrente: n → visione (scope 'season').
+		seasonVotes: new Map((state?.viewings || []).filter(viewing => viewing.movieId === movieId && viewing.scope === 'season' && (viewing.round || 1) === round).map(viewing => [viewing.season, viewing])),
 		round,
 		startedAt: record?.startedAt || null,
 		watched,

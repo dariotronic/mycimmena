@@ -172,3 +172,17 @@ test('greets on the birthday and wires onboarding, banner, key dialog and Androi
 	assert.match(keySetup, /Capacitor\?\.Plugins\?\.Clipboard/);
 	assert.match(keySetup, /document\.addEventListener\('visibilitychange', onVisible\)/);
 });
+
+test('lets the user mark a series as completed, vote a season and keep a note on it', () => {
+	const seasons = { source: 'custom', list: [{ n: 1, episodes: 2, titles: null, source: 'custom' }] };
+	const info = { seasons, watched: new Set(['1-1']), next: { s: 1, e: 2 }, status: 'watching', remaining: 1, total: 2, episodes: new Map(), notes: '', seasonVotes: new Map() };
+	const movie = { id: 'tt11280740', title: 'Severance', type: 'series', has_details: true };
+	const html = renderSeriesSection(movie, info, { mode: 'light' });
+	assert.deepEqual([...html.matchAll(/data-series-status="(\w+)" aria-pressed="(\w+)">([^<]+)</g)].map(match => [match[1], match[3]]), [['watching', 'In corso'], ['paused', 'In pausa'], ['finished', 'Completata'], ['dropped', 'Abbandonata']]);
+	assert.match(html, /data-season-vote="1">Vota la stagione</);
+	assert.match(html, /data-series-note>Scrivi una nota sulla serie</);
+	const voted = renderSeriesSection(movie, { ...info, status: null, notes: '<p>Da finire</p>', seasonVotes: new Map([[1, { id: 'v', rating: 8 }]]) }, { mode: 'light' });
+	assert.match(voted, /Voto alla stagione: 8 spipe su 10/);
+	assert.match(voted, /<div class="review-content series-note-text"><p>Da finire<\/p><\/div>/);
+	assert.match(voted, /data-series-status="watching" aria-pressed="false"/, 'gli stati si scelgono anche prima di iniziare');
+});

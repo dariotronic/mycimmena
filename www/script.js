@@ -94,6 +94,7 @@ const viewRenderer = createViews({
 	getColorMode: () => document.documentElement.dataset.theme,
 	getDiaryQuery: () => diary.getDiaryQuery(),
 	getDiaryOpenGroups: () => diary.getDiaryOpenGroups(),
+	getRestoreNotice: () => restoreNotice,
 	getData,
 	getMovieSearchMode: () => search.getMovieSearchMode(),
 	getMovieSort: () => watchlist.getMovieSort(),
@@ -131,7 +132,7 @@ const diary = createDiary({
 	// Dopo la visione nuova di un episodio: voto proposto alla stagione o alla serie appena finite.
 	onEpisodeSaved: (movieId, before, episodes) => seriesUi.proposeVotes(movieId, before, episodes)
 });
-const seriesUi = createSeriesUi({ app, store, details, getData, refresh, ask, askConfirmation, openViewing: target => diary.openViewingForm(target), refreshMovieInfo });
+const seriesUi = createSeriesUi({ app, store, details, getData, refresh, ask, askConfirmation, openViewing: target => diary.openViewingForm(target), refreshMovieInfo, renderEditor: options => viewRenderer.richEditor(options) });
 // Notifiche locali: si riallineano da sole dopo ogni lettura dei dati; il permesso si chiede solo dopo un'azione.
 const notifications = createNotifications({ getData });
 const askNotifications = () => notifications.sync({ ask: true }).then(updateNotifyStatus);
@@ -143,7 +144,18 @@ const completeNewTitles = ids => {
 	posters.ensure([...state.movies.values()].filter(movie => !ids || ids.includes(movie.id)));
 	details.complete(ids);
 };
-const backup = createBackupUi({ store, getData, getState: () => state, refresh, askConfirmation, onRestored: () => completeNewTitles() });
+// Esito dell'ultimo ripristino fatto dalle Impostazioni: avviso in cima alla pagina finché non si cambia vista.
+let restoreNotice = null;
+const backup = createBackupUi({
+	store, getData, getState: () => state, refresh, askConfirmation,
+	onRestored: result => {
+		completeNewTitles();
+		if (result?.fromOnboarding) return;
+		restoreNotice = result;
+		if (route() === 'impostazioni') render();
+		else location.hash = '#impostazioni';
+	}
+});
 const importer = createImportUi({ store, getData, refresh: loadData, askConfirmation, onImported: completeNewTitles });
 // Gli aggiornamenti ridisegnano senza disturbare chi sta scrivendo; l'avviso non copre l'onboarding.
 const updates = createUpdates({
@@ -239,8 +251,9 @@ async function updateNotifyStatus() {
 }
 
 const ROUTE_TITLES = { home: 'Home', diario: 'Diario', statistiche: 'Statistiche', prossimi: 'Randomizer', lista: 'Watchlist', impostazioni: 'Impostazioni', informazioni: 'Informazioni' };
-// Anno scelto nelle statistiche ('' = tutto il diario).
+// Anno scelto nelle statistiche ('' = tutto il diario) e cosa si conta: film o serie (interruttore in alto).
 let statsYear = '';
+let statsKind = 'movies';
 // Nomi delle pagine sul sito (e la vecchia pagina Serata, ora in Home): un link salvato porta comunque alla pagina giusta.
 const OLD_ROUTES = { profilo: 'impostazioni', archivio: 'diario', calendario: 'home' };
 
@@ -253,7 +266,7 @@ function render() {
 	const views = {
 		home: viewRenderer.renderHome,
 		diario: viewRenderer.renderDiary,
-		statistiche: () => `${pageHeader('Statistiche', 'Il tuo diario in numeri.')}<div class="stats-page">${renderStats(data, { year: statsYear, today: today(), formatDate })}</div>`,
+		statistiche: () => `${pageHeader('Statistiche', 'Il tuo diario in numeri.')}<div class="stats-page">${renderStats(data, { year: statsYear, today: today(), formatDate, kind: statsKind })}</div>`,
 		prossimi: viewRenderer.renderComingFilms,
 		lista: viewRenderer.renderMovieList,
 		impostazioni: viewRenderer.renderSettings,
@@ -329,6 +342,10 @@ function bindViewEvents() {
 	settings.bind();
 	updates.bind();
 	document.querySelector('[data-open-backup]')?.addEventListener('click', () => backup.open());
+	document.querySelector('[data-restore-notice-close]')?.addEventListener('click', () => {
+		restoreNotice = null;
+		render();
+	});
 	document.querySelector('[data-open-feedback]')?.addEventListener('click', () => feedback.open());
 	document.querySelectorAll('[data-notify]').forEach(toggle => toggle.addEventListener('click', async event => {
 		const on = event.currentTarget.getAttribute('aria-checked') !== 'true';
@@ -338,6 +355,13 @@ function bindViewEvents() {
 		if (on) askNotifications();
 	}));
 	updateNotifyStatus();
+	document.querySelectorAll('[data-stats-kind]').forEach(button => button.addEventListener('click', () => {
+		if (statsKind === button.dataset.statsKind) return;
+		statsKind = button.dataset.statsKind;
+		// L'anno scelto può non avere visioni dell'altro tipo: si riparte da tutto il diario.
+		statsYear = '';
+		render();
+	}));
 	document.querySelector('[data-stats-year]')?.addEventListener('change', event => {
 		statsYear = event.target.value;
 		render();
@@ -366,6 +390,7 @@ function updateDocumentTitle() {
 
 window.addEventListener('hashchange', () => {
 	navigation.closeMenu();
+	if (route() !== 'impostazioni') restoreNotice = null;
 	randomizer.clearSelectedMovie();
 	render();
 	// Le viste sono simulate nella stessa pagina: senza questo, la nuova vista si apre all'altezza di quella precedente.

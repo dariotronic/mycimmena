@@ -98,6 +98,8 @@ export function normalizeViewing(input, existing = null) {
 		rating,
 		notes: notes.html,
 		...seriesFields(input, existing),
+		// Voto di un episodio arrivato dal voto alla stagione (applySeasonRating): segue la stagione finché non lo si cambia.
+		...(input.ratingFrom === 'season' && rating !== null ? { ratingFrom: 'season' } : {}),
 		createdAt: existing?.createdAt || input.createdAt || stamp,
 		updatedAt: stamp
 	};
@@ -320,6 +322,42 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		});
 	}
 
+	// Voto dato a una stagione intera: vale anche per gli episodi visti di quella stagione (giro corrente) che non hanno
+	// un voto loro, o che lo avevano preso dalla stagione. Voto null: quegli episodi tornano senza voto.
+	async function applySeasonRating(movieId, season, rating) {
+		const value = validRating(rating);
+		if (value === undefined) throw new Error('Il voto va da mezza spipa a dieci spipe, a passi di mezza.');
+		return transaction(['viewings', 'series'], 'readwrite', async ({ viewings, series }) => {
+			const round = (await currentSeries(series, movieId))?.round || 1;
+			let changed = 0;
+			for (const viewing of await episodeSessions(viewings, movieId, round)) {
+				const episodes = viewing.episodes || [];
+				if (!episodes.length || !episodes.every(({ s }) => s === Number(season))) continue;
+				const own = viewing.rating !== null && viewing.rating !== undefined && viewing.ratingFrom !== 'season';
+				if (own || (viewing.rating ?? null) === value) continue;
+				const next = { ...viewing, rating: value, updatedAt: new Date().toISOString() };
+				if (value === null) delete next.ratingFrom;
+				else next.ratingFrom = 'season';
+				await request(viewings.put(next));
+				changed += 1;
+			}
+			return changed;
+		});
+	}
+
+	// Nota generale sulla serie (HTML filtrato come le note del diario), nella scheda della serie. '' la toglie.
+	async function setSeriesNote(movieId, html) {
+		const notes = sanitizeNotes(String(html || ''));
+		if (notes.text.length > 20000) throw new Error('La nota supera il limite di 20.000 caratteri.');
+		return transaction(['movies', 'series'], 'readwrite', async ({ movies, series }) => {
+			if (!(await request(movies.get(movieId)))) throw new Error('Titolo sconosciuto.');
+			const stamp = new Date().toISOString();
+			const record = { ...(await currentSeries(series, movieId) || { movieId, status: null, round: 1, startedAt: null }), notes: notes.text.trim() ? notes.html : '', updatedAt: stamp };
+			await request(series.put(record));
+			return record;
+		});
+	}
+
 	async function setSeriesStatus(movieId, status) {
 		if (!(status in SERIES_STATUSES)) throw new Error('Stato della serie non valido.');
 		return transaction('series', 'readwrite', async ({ series }) => {
@@ -335,7 +373,8 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		return transaction('series', 'readwrite', async ({ series }) => {
 			const stamp = new Date().toISOString();
 			const previous = await currentSeries(series, movieId);
-			const record = { movieId, status: 'watching', round: (previous?.round || 0) + 1, startedAt: stamp, updatedAt: stamp };
+			// Il nuovo giro tiene la nota della serie.
+			const record = { ...(previous || {}), movieId, status: 'watching', round: (previous?.round || 0) + 1, startedAt: stamp, updatedAt: stamp };
 			await request(series.put(record));
 			return record;
 		});
@@ -437,7 +476,10 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		return transaction('viewings', 'readwrite', async ({ viewings }) => {
 			const existing = await request(viewings.get(id));
 			if (!existing) throw new Error('Questa visione non esiste più.');
-			const viewing = normalizeViewing({ ...existing, ...input }, existing);
+			const merged = { ...existing, ...input };
+			// Un voto cambiato a mano non segue più quello della stagione.
+			if ('rating' in input && validRating(input.rating) !== (existing.rating ?? null)) delete merged.ratingFrom;
+			const viewing = normalizeViewing(merged, existing);
 			await request(viewings.put(viewing));
 			return viewing;
 		});
@@ -504,6 +546,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		const hasValidKey = settings => Boolean(settings?.omdbKey) && settings.omdbKeyStatus === 'valid';
 		return transaction(['movies', 'watchlist', 'viewings', 'series', 'kv'], 'readwrite', async ({ movies, watchlist, viewings, series, kv }) => {
 			const keyBefore = await getKv(kv, 'settings');
+			const onboardingBefore = await getKv(kv, 'onboarding');
 			if (mode === 'replace') {
 				for (const objectStore of [movies, watchlist, viewings, series]) await request(objectStore.clear());
 				for (const key of ['planned', 'profile', 'settings', 'onboarding']) await request(kv.delete(key));
@@ -534,6 +577,12 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 					if (hasValidKey(phone) && !hasValidKey(next)) next = { ...next, detailMode: 'full', omdbKey: phone.omdbKey, omdbKeyStatus: 'valid', omdbPausedUntil: null };
 				}
 				await putKv(kv, key, next);
+			}
+			// Un telefono che ha già fatto il benvenuto non lo rifà per un backup (anche con "Sostituisci tutto", o con un
+			// backup senza lo stato del benvenuto): si resta dove si era, con profilo e impostazioni ripristinati.
+			if (onboardingBefore?.done) {
+				const current = await getKv(kv, 'onboarding');
+				if (!current?.done) await putKv(kv, 'onboarding', { ...(current || {}), done: true, step: 'end', restore: null, finishedAt: onboardingBefore.finishedAt || current?.finishedAt || null });
 			}
 			return { mode };
 		});
@@ -568,7 +617,7 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 	}
 
 	return {
-		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, splitEpisode, setSeriesStatus, restartSeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
+		open, close, loadAll, updateKv, saveMovie, saveDetails, saveSeasons, markEpisodes, unmarkEpisodes, splitEpisode, applySeasonRating, setSeriesNote, setSeriesStatus, restartSeries, addToWatchlist, removeFromWatchlist, setHype, savePlanned, clearPlanned, completePlanned,
 		addViewing, updateViewing, deleteViewing, getPoster, savePoster, posterIds, requestPersistence, importViewings, getImportJob, saveImportJob, clearImportJob, exportData, restoreData, STORES
 	};
 }

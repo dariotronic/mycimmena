@@ -32,6 +32,8 @@ export function createViews(context) {
 		getDiaryQuery = () => '',
 		// Gruppi di episodi aperti nel diario (date|serie|giro), per tenerli aperti quando la lista si ridisegna.
 		getDiaryOpenGroups = () => new Set(),
+		// Esito dell'ultimo ripristino di un backup dalle Impostazioni ({ mode, text }), o null.
+		getRestoreNotice = () => null,
 		getColorMode = () => 'day',
 		getMovieSearchMode,
 		getMovieSort,
@@ -504,7 +506,49 @@ export function createViews(context) {
 			<h3 id="movie-info-viewings-title" class="movie-vote-title">I miei voti</h3>
 			${overall ? `<p class="my-viewings-average">Serie: ${escapeHtml(formatSpipe(Number(overall.rating)))}</p>` : ''}
 			${seasonRows ? `<ul class="series-votes">${seasonRows}</ul>` : ''}
-			<ul class="my-viewings">${list.map(viewing => myViewingItem(viewing, viewing.label)).join('')}</ul>
+			<ul class="my-viewings">${groupSeriesViewings(list).map(entry => (Array.isArray(entry) ? episodeDayGroup(movie, entry) : myViewingItem(entry, entry.label))).join('')}</ul>
+		`;
+	}
+
+	// Gli episodi dello stesso giorno e della stessa stagione stanno insieme (un gruppo solo se sono più di uno);
+	// voti a stagioni e serie restano a sé. L'ordine resta quello della lista (dalla visione più recente).
+	function groupSeriesViewings(list) {
+		const groups = new Map();
+		const entries = [];
+		for (const viewing of list) {
+			if (viewing.scope !== 'episodes' || !(viewing.episodes || []).length) {
+				entries.push(viewing);
+				continue;
+			}
+			const key = `${viewing.date}|${viewing.episodes[0].s}`;
+			if (!groups.has(key)) {
+				groups.set(key, []);
+				entries.push(groups.get(key));
+			}
+			groups.get(key).push(viewing);
+		}
+		return entries.map(entry => (Array.isArray(entry) && entry.length === 1 ? entry[0] : entry));
+	}
+
+	function episodeDayGroup(movie, viewings) {
+		const episodes = viewings.flatMap(viewing => viewing.episodes || []);
+		const label = viewingLabel({ scope: 'episodes', episodes }, movie.seasons);
+		const rated = viewings.filter(viewing => viewing.rating);
+		const average = rated.length ? Math.round((rated.reduce((sum, viewing) => sum + Number(viewing.rating), 0) / rated.length) * 2) / 2 : null;
+		const sorted = [...viewings].sort((first, second) => first.episodes[0].e - second.episodes[0].e);
+		return `
+			<li class="my-viewing-group">
+				<details>
+					<summary>
+						<span class="my-viewing-group-copy">
+							<span class="my-viewing-date">${escapeHtml(formatDate(viewings[0].date))} · ${escapeHtml(label)}</span>
+							<span class="diary-meta">${episodes.length} episodi${average ? ` · media ${escapeHtml(formatSpipe(average))}` : ''}</span>
+						</span>
+						<span class="diary-episodes-toggle" aria-hidden="true">${icon('expand_more')}</span>
+					</summary>
+					<ul class="my-viewings">${sorted.map(viewing => myViewingItem(viewing, viewing.label)).join('')}</ul>
+				</details>
+			</li>
 		`;
 	}
 
@@ -552,6 +596,7 @@ export function createViews(context) {
 						<button class="text-button viewing-clear-rating" type="button"${rating ? '' : ' hidden'}>Togli il voto</button>
 					</div>
 				</fieldset>
+				${kind === 'season' ? '<p class="help-text season-vote-help">Il voto vale anche per gli episodi visti di questa stagione che non hanno un voto loro.</p>' : ''}
 				${richEditor({ label: 'Note <span>(facoltative)</span>', toolbarLabel: 'Formattazione delle note', textLabel: 'Note sulla visione', content: viewing ? sanitizeNotes(viewing.notes).html : '' })}
 				${!viewing && inWatchlist && !kind ? `
 					<label class="viewing-remove-watchlist">
@@ -941,6 +986,15 @@ export function createViews(context) {
 		const posterThemeOn = data.settings?.posterTheme !== false;
 		return `
 			${pageHeader('Impostazioni', profile.name ? `Ciao, ${profile.name}!` : 'Ciao!')}
+			${getRestoreNotice() ? `
+				<div class="restore-notice" role="status">
+					<div>
+						<p><strong>${getRestoreNotice().mode === 'replace' ? 'Backup ripristinato ✓' : 'Backup unito ai tuoi dati ✓'}</strong></p>
+						${getRestoreNotice().text ? `<p>${escapeHtml(getRestoreNotice().text)}</p>` : ''}
+					</div>
+					<button class="icon-button small" type="button" data-restore-notice-close aria-label="Chiudi l’avviso" title="Chiudi">${icon('close')}</button>
+				</div>
+			` : ''}
 			<section class="settings-panel">
 				<div class="settings-profile">
 					${data.favorite ? `<button class="movie-poster-trigger settings-favorite" data-movie-id="${escapeHtml(data.favorite.id)}" type="button" aria-label="Il tuo film del cuore: ${escapeHtml(data.favorite.title)}">${poster(data.favorite, 'archive-film-poster')}</button>` : ''}
@@ -1089,5 +1143,5 @@ export function createViews(context) {
 		`;
 	}
 
-	return { minVotesLabel, renderInfo, renderWatching, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderViewingSummary, renderMeetingForm, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
+	return { richEditor, minVotesLabel, renderInfo, renderWatching, renderDiary, renderDiaryRows, renderMyViewings, renderViewingForm, renderViewingSummary, renderMeetingForm, renderComingFilms, renderHome, renderMovieList, renderMovieRows, renderRandomizerCount, renderRandomizerOdds, renderSettings, randomizerFiltered };
 }

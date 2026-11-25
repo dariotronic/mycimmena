@@ -47,9 +47,16 @@ function ranking(entries, limit = TOP) {
 		.slice(0, limit);
 }
 
-// year: '' per tutto il diario, oppure '2026'. today: 'AAAA-MM-GG' (per gli ultimi 12 mesi).
-export function computeStats(data, { year = '', today }) {
-	const all = (data?.viewings || []).filter(viewing => viewing.movie && /^\d{4}-\d{2}-\d{2}$/.test(String(viewing.date || '')));
+// Film e serie si contano a parte (l'interruttore in cima alla pagina): 'movies' o 'series'.
+export const isSeriesViewing = viewing => viewing.movie?.type === 'series';
+export const ofKind = (viewings, kind) => (viewings || []).filter(viewing => (kind === 'series' ? isSeriesViewing(viewing) : !isSeriesViewing(viewing)));
+
+// year: '' per tutto il diario, oppure '2026'. today: 'AAAA-MM-GG' (per gli ultimi 12 mesi). kind: 'movies' | 'series'.
+// Per le serie le visioni per mese contano gli episodi (una visione può averne più d'uno, dalle versioni fino alla 0.5).
+export function computeStats(data, { year = '', today, kind = 'movies' }) {
+	const all = ofKind(data?.viewings, kind).filter(viewing => viewing.movie && /^\d{4}-\d{2}-\d{2}$/.test(String(viewing.date || '')));
+	const units = viewing => (kind === 'series' ? (viewing.episodes || []).length : 1);
+	const sumUnits = list => list.reduce((sum, viewing) => sum + units(viewing), 0);
 	const inPeriod = year ? all.filter(viewing => viewing.date.startsWith(year)) : all;
 	const watches = inPeriod.filter(isWatch);
 	const films = watches.filter(viewing => viewing.movie.type !== 'series');
@@ -82,9 +89,9 @@ export function computeStats(data, { year = '', today }) {
 		key,
 		label: MONTHS[Number(key.slice(5)) - 1],
 		year: key.slice(0, 4),
-		count: (year ? watches : all.filter(isWatch)).filter(viewing => viewing.date.startsWith(key)).length
+		count: sumUnits((year ? watches : all.filter(isWatch)).filter(viewing => viewing.date.startsWith(key)))
 	}));
-	const perYear = statsYears(all).reverse().map(key => ({ key, label: key, count: all.filter(isWatch).filter(viewing => viewing.date.startsWith(key)).length }));
+	const perYear = statsYears(all).reverse().map(key => ({ key, label: key, count: sumUnits(all.filter(isWatch).filter(viewing => viewing.date.startsWith(key))) }));
 
 	// Voti: dieci colonne, da 1 a 10 spipe (le mezze vanno con l'intero sopra: 6½ conta come 7).
 	const ratingBuckets = Array.from({ length: 10 }, (_, index) => ({ key: String(index + 1), label: String(index + 1), count: 0 }));
@@ -104,8 +111,13 @@ export function computeStats(data, { year = '', today }) {
 	const favouriteViewings = favouriteKey ? films.filter(viewing => splitList(viewing.movie.director).some(name => name.toLocaleLowerCase('it') === favouriteKey)) : [];
 	const favouriteRatings = favouriteViewings.map(viewing => viewing.rating).filter(value => value !== null && value !== undefined).map(Number);
 
+	// Serie completate fra quelle viste nel periodo (stato "Completata" nella scheda).
+	const seriesIds = [...new Set(sessions.map(viewing => viewing.movieId))];
+	const completed = seriesIds.filter(id => data?.seriesOf?.(id)?.status === 'finished').length;
 	return {
 		year,
+		kind,
+		completed,
 		watches: watches.length,
 		films: new Set(films.map(viewing => viewing.movieId)).size,
 		filmViewings: films.length,

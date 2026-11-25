@@ -12,7 +12,7 @@ export const MAX_EPISODES = 500;
 export const SERIES_STATUSES = Object.freeze({
 	watching: 'In corso',
 	paused: 'In pausa',
-	finished: 'Finita',
+	finished: 'Completata',
 	dropped: 'Abbandonata'
 });
 

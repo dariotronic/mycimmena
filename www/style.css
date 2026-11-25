@@ -319,6 +319,10 @@ body.modal-open { overflow: hidden; }
 .movie-actions .button.icon-only, .movie-actions .icon-button.small { width: 34px; height: 34px; flex-shrink: 0; }
 .field input, .field select { width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); transition: border-color .18s ease, box-shadow .18s ease; }
 .field input:focus, .field select:focus { outline: none; border-color: var(--apricot); box-shadow: 0 0 0 3px var(--accent-focus); }
+/* Avviso in cima alle Impostazioni dopo il ripristino di un backup. */
+.restore-notice { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--accent-border); border-radius: var(--radius-lg); background: var(--accent-wash); line-height: 1.5; }
+.restore-notice p { margin: 0; }
+.restore-notice strong { color: var(--rust); }
 .settings-panel { display: grid; width: 100%; gap: 20px; padding: clamp(18px, 4vw, 24px); border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-sm); }
 .settings-panel > p:first-child { margin-top: 0; line-height: 1.6; }
 .settings-panel .status-message { grid-column: 1 / -1; margin-bottom: 0; }
@@ -945,6 +949,25 @@ html[data-webview-too-old="true"] .site-shell { display: none; }
 .movie-info-viewings[hidden] { display: none; }
 .my-viewings-average { margin: 0; color: var(--muted); font-size: .85rem; font-weight: 600; }
 .my-viewings { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+/* Statistiche: interruttore Film | Serie TV in cima. */
+.stats-kind { display: grid; grid-template-columns: 1fr 1fr; margin: 0 0 16px; padding: 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.stats-kind-option { min-height: 42px; padding: 6px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: .8rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; transition: background .2s ease, color .2s ease; }
+.stats-kind-option.active { background: var(--rust); color: var(--paper); }
+.stats-kind-option:focus-visible { outline: 2px solid var(--rust); outline-offset: 2px; }
+/* "I miei voti" di una serie: gli episodi dello stesso giorno e stagione in un gruppo che si apre. */
+.my-viewing-group details { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.my-viewing-group summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.my-viewing-group summary::-webkit-details-marker { display: none; }
+.my-viewing-group-copy { display: grid; gap: 4px; }
+.my-viewing-group details[open] .diary-episodes-toggle { transform: rotate(180deg); }
+.my-viewing-group .my-viewings { padding: 0 10px 10px; }
+/* Serie: nota generale e voto alla stagione. */
+.series-note { display: grid; gap: 6px; margin: 4px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.series-note-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.series-note-head .field-label { margin: 0; color: var(--muted); font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.series-note-text { margin: 0; font-size: .95rem; }
+.series-note-add { margin: 4px 0 12px; }
+.season-vote-help { margin: -4px 0 10px; }
 .my-viewing-item { display: flex; align-items: center; gap: 8px; }
 .my-viewing-item .viewing-read { flex: none; }
 .my-viewing { display: grid; gap: 4px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }

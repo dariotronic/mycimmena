@@ -132,6 +132,9 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		const submit = target.querySelector('button[type="submit"]');
 		submit.disabled = true;
 		try {
+			// Voto a una stagione: vale anche per i suoi episodi senza un voto loro (store.applySeasonRating).
+			const existing = target.dataset.viewingId ? getData().viewings.find(item => item.id === target.dataset.viewingId) : null;
+			const seasonVote = existing?.scope === 'season' ? existing.season : input.scope === 'season' ? input.season : null;
 			if (target.dataset.viewingId) {
 				await store.updateViewing(target.dataset.viewingId, input);
 				showToast('viewingUpdated');
@@ -143,6 +146,7 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 				else if (input.scope) showToast('seriesRated');
 				else showToast('viewingSaved', { removed: removeFromWatchlist });
 			}
+			if (seasonVote) await store.applySeasonRating(input.movieId, seasonVote, input.rating || null);
 			await closeDialog({ confirm: false });
 			await refresh();
 			if (episodes.length) await onEpisodeSaved(input.movieId, before, episodes);
@@ -156,7 +160,10 @@ export function createDiary({ app, store, getData, viewRenderer, askConfirmation
 		const question = target.querySelector('.viewing-delete')?.dataset.confirm || 'Eliminare questa visione dal diario?';
 		if (!(await askConfirmation(question))) return;
 		try {
+			const removed = getData().viewings.find(item => item.id === target.dataset.viewingId);
 			await store.deleteViewing(target.dataset.viewingId);
+			// Senza il voto alla stagione, gli episodi che l'avevano preso da lì tornano senza voto.
+			if (removed?.scope === 'season') await store.applySeasonRating(removed.movieId, removed.season, null);
 			await closeDialog({ confirm: false });
 			showToast('viewingDeleted');
 			await refresh();

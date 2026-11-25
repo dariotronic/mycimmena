@@ -5,6 +5,7 @@
 // del file sul telefono (saveBackupFile). Il ripristino nel database lo fa store.restoreData.
 import { normalizeMovie, normalizeViewing, SCHEMA_VERSION } from './store.js';
 import { SERIES_STATUSES } from './series.js';
+import { sanitizeNotes } from './sanitize.js';
 import { today } from './domain.js';
 
 export const BACKUP_FORMAT = 1;
@@ -96,9 +97,11 @@ export function parseBackup(raw) {
 		createdAt: stamp(viewing.createdAt) || stamp(viewing.updatedAt) || new Date(0).toISOString(),
 		updatedAt: stamp(viewing.updatedAt) || stamp(viewing.createdAt) || new Date(0).toISOString()
 	});
-	const series = each(source.series, record => known(record.movieId) && record.status in SERIES_STATUSES && {
+	// Una serie può avere solo la nota, senza stato (non ancora iniziata).
+	const series = each(source.series, record => known(record.movieId) && (record.status === null || record.status === undefined || record.status in SERIES_STATUSES) && {
 		movieId: record.movieId,
-		status: record.status,
+		status: record.status ?? null,
+		notes: typeof record.notes === 'string' ? sanitizeNotes(record.notes).html : '',
 		round: Number.isInteger(record.round) && record.round >= 1 ? record.round : 1,
 		startedAt: stamp(record.startedAt),
 		updatedAt: stamp(record.updatedAt)

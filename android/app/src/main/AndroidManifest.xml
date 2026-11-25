@@ -39,6 +39,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Vibrazione (navigator.vibrate): scatti del randomizer, Hypometro, voto a gatti, tocco lungo sugli episodi.
+         Senza questo permesso la WebView la ignora in silenzio. Permesso normale: Android non chiede niente. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Aggiornamento dentro l'app: aprire l'installer con l'APK scaricato (Android chiede il consenso una volta). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Backup in Documenti: fino ad Android 10 serve il permesso della memoria, dopo no. -->
