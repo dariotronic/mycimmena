@@ -40,6 +40,8 @@ function dateChip(date) {
 	yesterday.setDate(yesterday.getDate() - 1);
 	return date === today(yesterday) ? 'ieri' : formatDate(date);
 }
+// Voto corto per le righe delle stagioni: "8½", "7".
+const shortVote = value => String(Math.floor(value)) + (value % 1 ? '½' : '');
 const bar = (value, total) => `<span class="series-bar" aria-hidden="true"><span style="width: ${total ? Math.round((value / total) * 100) : 0}%"></span></span>`;
 
 // Voto a una stagione o a tutta la serie: lo slider dei gatti delle recensioni, che salva da solo a fine gesto.
@@ -79,7 +81,6 @@ function seasonBlock(movie, info, season, current) {
 	const { seasons, watched } = info;
 	const { seen } = seasonProgress(seasons, watched, season.n);
 	const vote = info.seasonVotes?.get(season.n) || null;
-	const custom = season.source === 'custom' ? '<span class="series-custom-badge">inserita da te</span>' : '';
 	const done = season.episodes > 0 && seen === season.episodes;
 	const body = season.episodes
 		? `<div class="episode-grid" role="group" aria-label="Episodi della stagione ${season.n}">${Array.from({ length: season.episodes }, (_, index) => {
@@ -97,8 +98,8 @@ function seasonBlock(movie, info, season, current) {
 	return `
 		<details class="series-season" data-season="${season.n}"${(openSeasons.get(movie.id)?.has(season.n) ?? season.n === current) ? ' open' : ''}>
 			<summary>
-				<span class="series-season-name">Stagione ${season.n}${custom}</span>
-				<span class="series-season-count">${seen}/${season.episodes || '?'}${vote ? ` · <strong>${escapeHtml(formatSpipe(vote))}</strong>` : ''}</span>
+				<span class="series-season-name">Stagione ${season.n}</span>
+				<span class="series-season-count">${seen}/${season.episodes || '?'}${vote ? ` · <strong aria-label="${escapeHtml(formatSpipe(vote))}">${shortVote(vote)}</strong>` : ''}</span>
 				${bar(seen, season.episodes)}
 				${done && !vote ? '<span class="series-season-invite">Finita! Vota la stagione</span>' : ''}
 			</summary>

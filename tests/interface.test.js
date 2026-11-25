@@ -78,9 +78,9 @@ test('shows the series card in four blocks: progress, seasons, verdict and the d
 	assert.match(html, /Prossimo: <strong>S1·E3 «Tre»<\/strong> · 3 episodi rimasti/);
 	// Stagioni: righe con avanzamento e voto, la griglia dentro; nessun campo data per stagione.
 	assert.match(html, /<details class="series-season" data-season="1" open>/);
-	assert.match(html, /<span class="series-season-count">2\/3 · <strong>9 spipe su 10<\/strong><\/span>/);
+	assert.match(html, /<span class="series-season-count">2\/3 · <strong aria-label="9 spipe su 10">9<\/strong><\/span>/);
 	assert.match(html, /data-episode="1-1" aria-pressed="true" aria-label="S1·E1 Pilota, visto il [^"]+"/);
-	assert.match(html, /<span class="series-season-name">Stagione 2<span class="series-custom-badge">inserita da te<\/span><\/span>/);
+	assert.match(html, /<span class="series-season-name">Stagione 2<\/span>/);
 	assert.match(html, /data-series-vote="season" data-season="1" data-saved="9"/);
 	assert.doesNotMatch(html, /data-season-date|data-series-restart|La struttura non è giusta|Aggiungi una stagione/);
 	assert.match(html, /data-series-structure>Modifica stagioni</);

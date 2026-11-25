@@ -1099,8 +1099,8 @@ html[data-onboarding="true"] .site-shell { flex: none; min-height: 0; margin: 0;
 .series-season > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 12px; padding: 12px 14px; cursor: pointer; list-style: none; }
 .series-season > summary::-webkit-details-marker { display: none; }
 .series-season > summary .series-bar { grid-column: 1 / -1; }
-.series-season-name { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
-.series-season-count { color: var(--muted); font-size: .82rem; font-variant-numeric: tabular-nums; }
+.series-season-name { min-width: 0; font-weight: 700; }
+.series-season-count { white-space: nowrap; color: var(--muted); font-size: .82rem; font-variant-numeric: tabular-nums; }
 .series-season-count strong { color: var(--rust); }
 .series-season-count::after { content: "▾"; display: inline-block; margin-left: 6px; transition: transform .18s ease; }
 .series-season[open] .series-season-count::after { transform: rotate(180deg); }
