@@ -547,6 +547,9 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 		return transaction(['movies', 'watchlist', 'viewings', 'series', 'kv'], 'readwrite', async ({ movies, watchlist, viewings, series, kv }) => {
 			const keyBefore = await getKv(kv, 'settings');
 			const onboardingBefore = await getKv(kv, 'onboarding');
+			// Profilo, serata e impostazioni del telefono prima del ripristino: con "Sostituisci tutto" restano quelli che il
+			// backup non ha (un backup fatto senza profilo non cancella nome, compleanno e risposte del benvenuto).
+			const phoneBefore = { planned: await getKv(kv, 'planned'), profile: await getKv(kv, 'profile') };
 			if (mode === 'replace') {
 				for (const objectStore of [movies, watchlist, viewings, series]) await request(objectStore.clear());
 				for (const key of ['planned', 'profile', 'settings', 'onboarding']) await request(kv.delete(key));
@@ -564,10 +567,17 @@ export function createStore({ indexedDB = globalThis.indexedDB, name = DB_NAME }
 			for (const record of data.series) await putNewer(series, record.movieId, record, item => String(item.updatedAt || ''));
 			for (const key of ['planned', 'profile', 'settings', 'onboarding']) {
 				// Senza impostazioni nel backup si passa da un record vuoto: serve a non perdere la chiave (sotto).
-				const incoming = data[key] || (key === 'settings' ? {} : null);
+				const kept = mode === 'replace' && !data[key] ? phoneBefore[key] : null;
+				const incoming = data[key] || kept || (key === 'settings' ? {} : null);
 				if (!incoming) continue;
 				const local = mode === 'merge' ? await getKv(kv, key) : null;
 				let next = !local || String(incoming.updatedAt || '') > String(local.updatedAt || '') ? incoming : local;
+				// Profilo: i dati che mancano nella versione scelta (per esempio il compleanno) vengono dall'altra.
+				if (key === 'profile') {
+					const other = mode === 'merge' ? (next === local ? incoming : local) : phoneBefore.profile;
+					const filled = Object.fromEntries(Object.entries(next).filter(([, value]) => value !== '' && value !== null && value !== undefined));
+					if (other) next = { ...other, ...filled };
+				}
 				// L'onboarding fatto su uno dei due telefoni vale per entrambi.
 				if (key === 'onboarding' && (local?.done || incoming.done)) next = { ...next, done: true };
 				// Una chiave OMDb valida già su questo telefono non si perde per un backup che non ne ha una (per esempio

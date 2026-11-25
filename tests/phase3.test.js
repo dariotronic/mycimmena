@@ -366,3 +366,21 @@ test('keeps the series notes in a backup, also for a series not started yet', ()
 	assert.equal(parsed.data.series[0].status, null);
 	assert.equal(parsed.data.series[1].status, 'finished');
 });
+
+test('keeps the profile of this phone when the backup has none, or fills what the backup lacks', async () => {
+	const profile = { name: 'Dario', birthday: '08-12', place: 'divano', spectator: 'commento' };
+	for (const mode of ['merge', 'replace']) {
+		// Backup senza profilo (come quelli fatti con la 0.5 prima di compilarlo): il profilo del telefono resta.
+		let store = freshStore();
+		await store.updateKv('profile', profile);
+		const empty = { movies: [], watchlist: [], viewings: [], series: [], planned: null, profile: null, settings: null, onboarding: null };
+		await store.restoreData(empty, { mode });
+		assert.deepEqual(Object.fromEntries(Object.entries((await store.loadAll()).profile).filter(([key]) => key !== 'updatedAt')), profile, mode);
+		// Backup con un profilo più recente ma senza compleanno: il nome è quello del backup, il compleanno resta.
+		store = freshStore();
+		await store.updateKv('profile', profile);
+		await store.restoreData({ ...empty, profile: { name: 'Gigi', updatedAt: '2999-01-01T00:00:00.000Z' } }, { mode });
+		const restored = (await store.loadAll()).profile;
+		assert.deepEqual([restored.name, restored.birthday, restored.place], ['Gigi', '08-12', 'divano'], mode);
+	}
+});
